@@ -88,6 +88,19 @@ function update(dt) {
 
   updateMiasma(state, dt);
   updateEnemies(state, dt);
+  
+// --- Contact damage from enemies ---
+const contactDPS = 10; // damage per second when touching
+for (const m of state.enemies.list) {
+  const dx = m.x - state.camera.x;
+  const dy = m.y - state.camera.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist <= m.r + state.player.r) {
+    state.health -= contactDPS * dt;
+    if (state.health < 0) state.health = 0;
+  }
+}
+
 
 // Miasma damage – now uses full radius instead of center point
 const step = state.miasma.tile * 0.5; // sample step ~half tile
