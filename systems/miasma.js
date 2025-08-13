@@ -5,19 +5,23 @@
 export function initMiasma(state, opts = {}) {
   const halfCols = Math.floor((opts.cols ?? 400) / 2);
   const halfRows = Math.floor((opts.rows ?? 400) / 2);
-  const size = halfCols * 2 * halfRows * 2;
+  const cols = halfCols * 2;                 // <-- added
+  const rows = halfRows * 2;                 // <-- added
+  const size = cols * rows;                  // (same as halfCols*2 * halfRows*2)
 
   state.miasma = {
     // grid
     tile: opts.tile ?? 14,
     halfCols,
     halfRows,
-    strength: new Uint8Array(size).fill(1),     // 1 = fog, 0 = clear
+    cols,                                    // <-- added
+    rows,                                    // <-- added
+    strength: new Uint8Array(size).fill(1),  // 1 = fog, 0 = clear
 
     // regrowth
-    regrowDelay: opts.regrowDelay ?? 1.0,       // seconds before a cleared tile may regrow
-    baseChance:  opts.baseChance  ?? 0.20,      // per-tick base chance (amplified by adjacent fog)
-    tickHz:      opts.tickHz      ?? 8,         // regrowth ticks per second
+    regrowDelay: opts.regrowDelay ?? 1.0,    // seconds before a cleared tile may regrow
+    baseChance:  opts.baseChance  ?? 0.20,   // per-tick base chance (amplified by adjacent fog)
+    tickHz:      opts.tickHz      ?? 8,      // regrowth ticks per second
     lastCleared: new Float32Array(size).fill(-1e9),
     _accum: 0,
 
@@ -219,4 +223,3 @@ export function worldToIdx(s, wx, wy) {
 export function isFog(s, i) {
   return i < 0 ? true : s.strength[i] === 1;
 }
-
