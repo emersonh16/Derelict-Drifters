@@ -26,7 +26,8 @@ const state = {
   maxHealth: 100,
   gameOver: false,
   scrap: 0,
-  pickups: [] // {x, y, type, r}
+  pickups: [], // {x, y, type, r}
+  damageFlash: 0
 };
 
 // ---- Resize ----
@@ -119,9 +120,13 @@ function update(dt) {
     }
   }
   if (inFog) {
-    state.health -= MIASMA_DPS * dt;
-    if (state.health < 0) state.health = 0;
-  }
+  state.health -= MIASMA_DPS * dt;
+  state.damageFlash = 0.2; // trigger red flash
+  if (state.health < 0) state.health = 0;
+}
+
+state.damageFlash = Math.max(0, state.damageFlash - dt);
+
 
   // Game over gate
   if (state.health <= 0 && !state.gameOver) {
@@ -163,6 +168,12 @@ function draw() {
   ctx.beginPath();
   ctx.arc(cx, cy, state.player.r, 0, Math.PI * 2);
   ctx.fill();
+
+  if (state.damageFlash > 0) {
+  ctx.fillStyle = `rgba(255,0,0,${state.damageFlash * 0.5})`;
+  ctx.fillRect(0, 0, w, h);
+}
+
 
   // game over overlay
   if (state.gameOver) {

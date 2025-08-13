@@ -97,9 +97,11 @@ export function updateEnemies(state, dt) {
     }
 
     // Contact damage
-    if (dist <= m.r + playerR) {
-      state.health -= cfg.contactDPS * dt;
-    }
+   if (dist <= m.r + playerR) {
+  state.health -= cfg.contactDPS * dt;
+  state.damageFlash = 0.2; // flash for 0.2s
+}
+
 
     // Laser damage + flash
     applyLaserDamage(state, m, dt);
