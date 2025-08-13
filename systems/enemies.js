@@ -4,7 +4,7 @@
 export function initEnemies(state, opts = {}) {
   state.enemies = {
     list: [],
-    max: opts.max ?? 24,
+    max: opts.max ?? 60,
     // world bounds (change if your world uses different vars)
     worldW: opts.worldW ?? 2000,
     worldH: opts.worldH ?? 2000,
@@ -20,7 +20,7 @@ export function initEnemies(state, opts = {}) {
   };
 }
 
-export function spawnEnemies(state, count = 8) {
+export function spawnEnemies(state, count = 40) {
   const cfg = state.enemies;
   const out = cfg.list;
 
