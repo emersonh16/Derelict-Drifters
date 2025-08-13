@@ -1,102 +1,105 @@
-import { initWorld, drawWorld } from "../systems/world.js";
-import { initBeam, drawBeam, onWheelAdjust } from "../systems/beam.js";
+import { initBeam, drawBeam, onWheelAdjust, getBeamGeom } from "../systems/beam.js";
 import { initMiasma, updateMiasma, drawMiasma, clearWithBeam } from "../systems/miasma.js";
 
-const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d', { alpha: false });
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d", { alpha: false });
 
+const state = {
+  time: 0, dt: 0,
+  mouse: { x: 0, y: 0 },
+  camera: { x: 0, y: 0 },
+  player: { r: 18 },        // ← original derelict size restored
+  keys: new Set()
+};
+
+// ---- Resize ----
 function resize() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
+  state.mouse.x = canvas.width / 2;
+  state.mouse.y = canvas.height / 2;
 }
-addEventListener('resize', resize);
+window.addEventListener("resize", resize);
 resize();
 
-// ---- State ----
-const state = {
-  time: 0, dt: 0,
-  keys: new Set(),
-  mouse: { x: canvas.width * 0.8, y: canvas.height * 0.5 },
-  camera: { x: 0, y: 0 },
-  speed: 240,
-  player: { r: 18 }
-};
-
 // ---- Input ----
-addEventListener('keydown', (e) => state.keys.add(e.key.toLowerCase()));
-addEventListener('keyup',   (e) => state.keys.delete(e.key.toLowerCase()));
-addEventListener('mousemove', (e) => {
-  const r = canvas.getBoundingClientRect();
-  state.mouse.x = e.clientX - r.left;
-  state.mouse.y = e.clientY - r.top;
+window.addEventListener("keydown", (e) => state.keys.add(e.key.toLowerCase()));
+window.addEventListener("keyup",   (e) => state.keys.delete(e.key.toLowerCase()));
+
+canvas.addEventListener("mousemove", (e) => {
+  const rect = canvas.getBoundingClientRect();
+  state.mouse.x = e.clientX - rect.left;
+  state.mouse.y = e.clientY - rect.top;
 });
-addEventListener('wheel', (e) => {
-  onWheelAdjust(state, e.deltaY); // scroll morphs beam (no-beam ↔ bubble ↔ cone ↔ laser)
+canvas.addEventListener("wheel", (e) => {
+  onWheelAdjust(state, e.deltaY);
   e.preventDefault();
 }, { passive: false });
 
-// ---- Systems init ----
-initWorld(state, { grid: 80, rocks: 60, span: 4000, seed: 12345 });
-initBeam(state, {
-  // these should match what we used earlier in systems/beam.js
-  startT: 0.7, wheelStep: 0.05,
-  tNoBeamEnd: 0.08, tBubbleEnd: 0.42, tConeEnd: 0.88,
-  bubbleRMin: 32, bubbleRMax: 180,
-  coneHalfArcWideDeg: 60, coneHalfArcNarrowDeg: 1.6,
-  baseRange: 300, laserRange: 480
-});
-initMiasma(state, {
-  tile: 14, cols: 220, rows: 220,
-  regrowDelay: 1.2, tickHz: 8, baseChance: 0.14
+// ---- Init ----
+// Beam = half size (bubble, cone, laser ranges halved)
+initBeam(state, { 
+  startT: 0.7,
+  bubbleRMin: 16,   // was 32
+  bubbleRMax: 90,   // was 180
+  baseRange: 150,   // was 300
+  laserRange: 240,  // was 480
+  bumpRange: 20     // was 40
 });
 
-// ---- Update & Draw ----
+// Keep the small-tile miasma you already liked
+initMiasma(state, { 
+  tile: 7,          // half-size tiles (keep if you want the higher detail)
+  cols: 400, 
+  rows: 400 
+});
+
+// ---- Update ----
 function update(dt) {
-  // camera move (player locked center)
+  state.time += dt;
+
   let vx = 0, vy = 0;
   if (state.keys.has('w')) vy -= 1;
   if (state.keys.has('s')) vy += 1;
   if (state.keys.has('a')) vx -= 1;
   if (state.keys.has('d')) vx += 1;
+
   if (vx || vy) {
     const len = Math.hypot(vx, vy) || 1;
     vx /= len; vy /= len;
-    state.camera.x += vx * state.speed * dt;
-    state.camera.y += vy * state.speed * dt;
+    const speed = 240;
+    state.camera.x += vx * speed * dt;
+    state.camera.y += vy * speed * dt;
   }
 
-  // miasma regrowth ticks
-  updateMiasma(state, dt);
+  updateMiasma(state, dt); // crystal regrowth
 }
 
+// ---- Draw ----
 function draw() {
   const w = canvas.width, h = canvas.height;
   const cx = w / 2, cy = h / 2;
 
-  // background & motion cues
-  drawWorld(ctx, state, cx, cy, w, h);
+  ctx.fillStyle = "#0c0b10";
+  ctx.fillRect(0, 0, w, h);
 
-  // clear miasma using current beam shape (instant effect)
+  getBeamGeom(state, cx, cy);
   clearWithBeam(state, cx, cy);
-
-  // draw remaining miasma tiles (overlay)
   drawMiasma(ctx, state, cx, cy, w, h);
-
-  // render beam (visual on top)
   drawBeam(ctx, state, cx, cy);
 
-  // player (centered)
-  ctx.fillStyle = '#9a3b31';
+  // Player marker (original size)
+  ctx.fillStyle = "#9a3b31";
   ctx.beginPath();
   ctx.arc(cx, cy, state.player.r, 0, Math.PI * 2);
   ctx.fill();
 }
 
+// ---- Main Loop ----
 let last = performance.now();
 function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
-  state.time += dt;
   state.dt = dt;
   update(dt);
   draw();
