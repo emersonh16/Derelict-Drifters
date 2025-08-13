@@ -3,15 +3,14 @@ import {
   initMiasma, updateMiasma, drawMiasma, clearWithBeam,
   worldToIdx, isFog
 } from "../systems/miasma.js";
-import { initEnemies, spawnEnemies, updateEnemies, drawEnemies } from "../systems/enemies.js";
+import { initEnemies, spawnInitialEnemies, updateEnemies, drawEnemies } from "../systems/enemies.js";
 import { initHUD, updateHUD } from "../ui/hud.js";
-import { spawnPickup, updatePickups, drawPickups } from "../systems/pickups.js";
-
+import { updatePickups, drawPickups } from "../systems/pickups.js";
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d", { alpha: false });
 
-// miasma damage per second (TOP-LEVEL, not inside state)
+// Top-level constants
 const MIASMA_DPS = 35;
 
 const state = {
@@ -24,7 +23,7 @@ const state = {
   maxHealth: 100,
   gameOver: false,
   scrap: 0,
-  pickups: [] // array of {x, y, type}
+  pickups: [] // {x, y, type, r}
 };
 
 // ---- Resize ----
@@ -51,45 +50,39 @@ canvas.addEventListener("wheel", (e) => {
   e.preventDefault();
 }, { passive: false });
 
+// Restart (R)
 window.addEventListener("keydown", (e) => {
   if (e.key.toLowerCase() === "r" && state.gameOver) {
-    // quick reset
     state.health = state.maxHealth;
     state.camera.x = 0;
     state.camera.y = 0;
     state.enemies.list.length = 0;
-    spawnEnemies(state, 40);
+    spawnInitialEnemies(state, 40); // start full again (safe distance)
     state.gameOver = false;
   }
 });
 
-
 // ---- Init ----
-initBeam(state, { 
+initBeam(state, {
   startT: 0.42,
   bubbleRMin: 16, bubbleRMax: 90,
   baseRange: 150, laserRange: 240, bumpRange: 20
 });
 
-initMiasma(state, { tile: 7, cols: 400, rows: 400 });
+initMiasma(state, { tile: 5, cols: 450, rows: 450 });
 
-// NEW: enemies
-initEnemies(state, {
-  max: 24,
-  spawnRadius: 520,
-  minSpawnDist: 280,
-  baseHP: 120,
-  laserDPS: 180
-});
-spawnEnemies(state, 12);
+// Enemies
+initEnemies(state, { max: 40 });   // population cap
+spawnInitialEnemies(state, 40);    // start full (safe distance from player)
 
-// HUD (one time)
+// HUD
 initHUD(state);
 
 // ---- Update ----
 function update(dt) {
   state.time += dt;
 
+  // movement
   let vx = 0, vy = 0;
   if (state.keys.has('w')) vy -= 1;
   if (state.keys.has('s')) vy += 1;
@@ -105,44 +98,29 @@ function update(dt) {
   }
 
   updateMiasma(state, dt);
-  updateEnemies(state, dt);
-  updatePickups(state, dt);
+  updateEnemies(state, dt);     // includes contact damage + timed respawn
+  updatePickups(state, dt);     // handle pickup collisions
 
-  
-// --- Contact damage from enemies ---
-const contactDPS = 10; // damage per second when touching
-for (const m of state.enemies.list) {
-  const dx = m.x - state.camera.x;
-  const dy = m.y - state.camera.y;
-  const dist = Math.hypot(dx, dy);
-  if (dist <= m.r + state.player.r) {
-    state.health -= contactDPS * dt;
+  // Miasma damage (sample across player radius)
+  const step = state.miasma.tile * 0.5;
+  let inFog = false;
+  for (let dy = -state.player.r; dy <= state.player.r && !inFog; dy += step) {
+    for (let dx = -state.player.r; dx <= state.player.r; dx += step) {
+      if (dx*dx + dy*dy > state.player.r * state.player.r) continue;
+      const idx = worldToIdx(state.miasma, state.camera.x + dx, state.camera.y + dy);
+      if (isFog(state.miasma, idx)) { inFog = true; break; }
+    }
+  }
+  if (inFog) {
+    state.health -= MIASMA_DPS * dt;
     if (state.health < 0) state.health = 0;
   }
-}
 
-
-// Miasma damage – now uses full radius instead of center point
-const step = state.miasma.tile * 0.5; // sample step ~half tile
-let inFog = false;
-for (let dy = -state.player.r; dy <= state.player.r && !inFog; dy += step) {
-  for (let dx = -state.player.r; dx <= state.player.r; dx += step) {
-    if (dx*dx + dy*dy > state.player.r * state.player.r) continue;
-    const idx = worldToIdx(state.miasma, state.camera.x + dx, state.camera.y + dy);
-    if (isFog(state.miasma, idx)) { inFog = true; break; }
+  // Game over gate
+  if (state.health <= 0 && !state.gameOver) {
+    state.health = 0;
+    state.gameOver = true;
   }
-}
-if (inFog) {
-  state.health -= MIASMA_DPS * dt;
-  if (state.health < 0) state.health = 0;
-}
-
-
-if (state.health <= 0 && !state.gameOver) {
-  state.health = 0;
-  state.gameOver = true;
-}
-
 
   // HUD last
   updateHUD(state);
@@ -159,13 +137,12 @@ function draw() {
   getBeamGeom(state, cx, cy);
   clearWithBeam(state, cx, cy);
 
-  // enemies first (under fog)
+  // enemies (under fog)
   drawEnemies(ctx, state, cx, cy);
-
+  // pickups (under fog so they feel embedded)
   drawPickups(ctx, state, cx, cy);
 
-
-  // then fog over them
+  // fog over them
   drawMiasma(ctx, state, cx, cy, w, h);
 
   // beam on top
@@ -177,19 +154,19 @@ function draw() {
   ctx.arc(cx, cy, state.player.r, 0, Math.PI * 2);
   ctx.fill();
 
+  // game over overlay
   if (state.gameOver) {
-  ctx.fillStyle = "rgba(0,0,0,0.6)";
-  ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.fillRect(0, 0, w, h);
 
-  ctx.fillStyle = "white";
-  ctx.font = "bold 64px sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText("GAME OVER", w / 2, h / 2);
+    ctx.fillStyle = "white";
+    ctx.font = "bold 64px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("GAME OVER", w / 2, h / 2);
 
-  ctx.font = "24px sans-serif";
-  ctx.fillText("Press R to Restart", w / 2, h / 2 + 50);
-}
-
+    ctx.font = "24px sans-serif";
+    ctx.fillText("Press R to Restart", w / 2, h / 2 + 50);
+  }
 }
 
 // ---- Main Loop ----
@@ -202,7 +179,6 @@ function loop(now) {
   if (!state.gameOver) {
     update(dt);
   }
-
   draw();
   requestAnimationFrame(loop);
 }
