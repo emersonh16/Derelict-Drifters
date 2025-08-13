@@ -1,7 +1,7 @@
 import { initBeam, drawBeam, onWheelAdjust, getBeamGeom } from "../systems/beam.js";
 import {
   initMiasma, updateMiasma, drawMiasma, clearWithBeam,
-  worldToIdx, isFog
+  worldToIdx, isFog, circleHitsFog
 } from "../systems/miasma.js";
 import { initEnemies, spawnEnemies, updateEnemies, drawEnemies } from "../systems/enemies.js";
 import { initHUD, updateHUD } from "../ui/hud.js";
@@ -89,12 +89,12 @@ function update(dt) {
   updateMiasma(state, dt);
   updateEnemies(state, dt);
 
-  // Miasma damage
-  const idx = worldToIdx(state.miasma, state.camera.x, state.camera.y);
-  if (isFog(state.miasma, idx)) {
-    state.health -= MIASMA_DPS * dt;
-    if (state.health < 0) state.health = 0;
-  }
+ // Miasma damage using full derelict radius
+const HIT_R = state.player.r + 6; // small padding so visuals feel fair; tweak as you like
+if (circleHitsFog(state.miasma, state.camera.x, state.camera.y, HIT_R)) {
+  state.health -= MIASMA_DPS * dt;
+  if (state.health < 0) state.health = 0;
+}
 
   // HUD last
   updateHUD(state);

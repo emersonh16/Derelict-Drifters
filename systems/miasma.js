@@ -220,3 +220,38 @@ export function isFog(s, i) {
   return i < 0 ? true : s.strength[i] === 1;
 }
 
+// --- external helper: does a circle overlap any fog tiles? ---
+export function circleHitsFog(s, cxW, cyW, radius) {
+  if (!s) return false;
+  const t = s.tile;
+
+  // Treat off-map overlap as hazardous
+  const left = cxW - radius, right = cxW + radius, top = cyW - radius, bottom = cyW + radius;
+  if (left < -s.halfCols * t || right >= s.halfCols * t || top < -s.halfRows * t || bottom >= s.halfRows * t) {
+    return true;
+  }
+
+  // Tile bounds that the circle touches
+  const minGX = Math.max(-s.halfCols, Math.floor(left / t));
+  const maxGX = Math.min( s.halfCols - 1, Math.floor(right / t));
+  const minGY = Math.max(-s.halfRows, Math.floor(top  / t));
+  const maxGY = Math.min( s.halfRows - 1, Math.floor(bottom / t));
+
+  const r2 = radius * radius;
+
+  for (let gy = minGY; gy <= maxGY; gy++) {
+    for (let gx = minGX; gx <= maxGX; gx++) {
+      if (!tileActive(s, gx, gy)) continue; // skip clear tiles fast
+
+      // Circle-vs-AABB test for this tile
+      const tx0 = gx * t, ty0 = gy * t;
+      const tx1 = tx0 + t, ty1 = ty0 + t;
+      const nx = (cxW < tx0) ? tx0 : (cxW > tx1 ? tx1 : cxW); // clamp cxW to [tx0,tx1]
+      const ny = (cyW < ty0) ? ty0 : (cyW > ty1 ? ty1 : cyW); // clamp cyW to [ty0,ty1]
+      const dx = cxW - nx, dy = cyW - ny;
+
+      if (dx*dx + dy*dy <= r2) return true;
+    }
+  }
+  return false;
+}
