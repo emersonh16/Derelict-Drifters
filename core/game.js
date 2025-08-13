@@ -1,16 +1,25 @@
 import { initBeam, drawBeam, onWheelAdjust, getBeamGeom } from "../systems/beam.js";
-import { initMiasma, updateMiasma, drawMiasma, clearWithBeam } from "../systems/miasma.js";
+import {
+  initMiasma, updateMiasma, drawMiasma, clearWithBeam,
+  worldToIdx, isFog
+} from "../systems/miasma.js";
 import { initEnemies, spawnEnemies, updateEnemies, drawEnemies } from "../systems/enemies.js";
+import { initHUD, updateHUD } from "../ui/hud.js";
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d", { alpha: false });
+
+// miasma damage per second (TOP-LEVEL, not inside state)
+const MIASMA_DPS = 35;
 
 const state = {
   time: 0, dt: 0,
   mouse: { x: 0, y: 0 },
   camera: { x: 0, y: 0 },
   player: { r: 18 },
-  keys: new Set()
+  keys: new Set(),
+  health: 100,
+  maxHealth: 100,
 };
 
 // ---- Resize ----
@@ -56,6 +65,9 @@ initEnemies(state, {
 });
 spawnEnemies(state, 12);
 
+// HUD (one time)
+initHUD(state);
+
 // ---- Update ----
 function update(dt) {
   state.time += dt;
@@ -75,7 +87,17 @@ function update(dt) {
   }
 
   updateMiasma(state, dt);
-  updateEnemies(state, dt); // NEW
+  updateEnemies(state, dt);
+
+  // Miasma damage
+  const idx = worldToIdx(state.miasma, state.camera.x, state.camera.y);
+  if (isFog(state.miasma, idx)) {
+    state.health -= MIASMA_DPS * dt;
+    if (state.health < 0) state.health = 0;
+  }
+
+  // HUD last
+  updateHUD(state);
 }
 
 // ---- Draw ----
@@ -86,18 +108,17 @@ function draw() {
   ctx.fillStyle = "#0c0b10";
   ctx.fillRect(0, 0, w, h);
 
- getBeamGeom(state, cx, cy);
-clearWithBeam(state, cx, cy);
+  getBeamGeom(state, cx, cy);
+  clearWithBeam(state, cx, cy);
 
-// enemies first (under fog)
-drawEnemies(ctx, state, cx, cy);
+  // enemies first (under fog)
+  drawEnemies(ctx, state, cx, cy);
 
-// then fog over them
-drawMiasma(ctx, state, cx, cy, w, h);
+  // then fog over them
+  drawMiasma(ctx, state, cx, cy, w, h);
 
-// beam on top
-drawBeam(ctx, state, cx, cy);
-
+  // beam on top
+  drawBeam(ctx, state, cx, cy);
 
   // player
   ctx.fillStyle = "#9a3b31";
@@ -105,7 +126,6 @@ drawBeam(ctx, state, cx, cy);
   ctx.arc(cx, cy, state.player.r, 0, Math.PI * 2);
   ctx.fill();
 }
-
 
 // ---- Main Loop ----
 let last = performance.now();

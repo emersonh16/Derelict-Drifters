@@ -203,3 +203,20 @@ function angleDiff(a, b) {
   return d;
 }
 function toRad(deg){ return (deg * Math.PI)/180; }
+
+// --- external helpers for game logic ---
+// Convert world coords (wx, wy) to a strength[] index, or -1 if out of bounds
+export function worldToIdx(s, wx, wy) {
+  if (!s) return -1;
+  const gx = Math.floor(wx / s.tile);
+  const gy = Math.floor(wy / s.tile);
+  if (gx < -s.halfCols || gx >= s.halfCols || gy < -s.halfRows || gy >= s.halfRows) return -1;
+  // reuse the module's own indexing so we never drift from drawMiasma()
+  return idx(s, gx, gy);
+}
+
+// Is this index fog (true) or clear (false)? Off-map counts as hazardous.
+export function isFog(s, i) {
+  return i < 0 ? true : s.strength[i] === 1;
+}
+
