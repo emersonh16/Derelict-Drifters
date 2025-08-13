@@ -54,8 +54,14 @@ export function initBeam(state, opts = {}) {
 
 export function onWheelAdjust(state, deltaY) {
   const b = state.beam;
-  // invert: wheel down (deltaY > 0) => t goes DOWN; wheel up => t goes UP
-  b.t = clamp(b.t - Math.sign(deltaY) * b.step, 0, 1);
+
+  // Force: wheel down => toward laser, wheel up => toward off
+  const dir = deltaY > 0 ? -1 : 1;
+
+  b.t = clamp(b.t + dir * b.step, 0, 1);
+
+  console.log(deltaY);
+
 }
 
 

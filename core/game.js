@@ -48,7 +48,7 @@ canvas.addEventListener("wheel", (e) => {
 
 // ---- Init ----
 initBeam(state, { 
-  startT: 0.7,
+  startT: 0.42,
   bubbleRMin: 16, bubbleRMax: 90,
   baseRange: 150, laserRange: 240, bumpRange: 20
 });
