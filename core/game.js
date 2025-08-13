@@ -20,6 +20,7 @@ const state = {
   keys: new Set(),
   health: 100,
   maxHealth: 100,
+  gameOver: false
 };
 
 // ---- Resize ----
@@ -45,6 +46,19 @@ canvas.addEventListener("wheel", (e) => {
   onWheelAdjust(state, e.deltaY);
   e.preventDefault();
 }, { passive: false });
+
+window.addEventListener("keydown", (e) => {
+  if (e.key.toLowerCase() === "r" && state.gameOver) {
+    // quick reset
+    state.health = state.maxHealth;
+    state.camera.x = 0;
+    state.camera.y = 0;
+    state.enemies.list.length = 0;
+    spawnEnemies(state, 40);
+    state.gameOver = false;
+  }
+});
+
 
 // ---- Init ----
 initBeam(state, { 
@@ -118,6 +132,12 @@ if (inFog) {
 }
 
 
+if (state.health <= 0 && !state.gameOver) {
+  state.health = 0;
+  state.gameOver = true;
+}
+
+
   // HUD last
   updateHUD(state);
 }
@@ -147,6 +167,20 @@ function draw() {
   ctx.beginPath();
   ctx.arc(cx, cy, state.player.r, 0, Math.PI * 2);
   ctx.fill();
+
+  if (state.gameOver) {
+  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  ctx.fillRect(0, 0, w, h);
+
+  ctx.fillStyle = "white";
+  ctx.font = "bold 64px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("GAME OVER", w / 2, h / 2);
+
+  ctx.font = "24px sans-serif";
+  ctx.fillText("Press R to Restart", w / 2, h / 2 + 50);
+}
+
 }
 
 // ---- Main Loop ----
@@ -155,7 +189,11 @@ function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   state.dt = dt;
-  update(dt);
+
+  if (!state.gameOver) {
+    update(dt);
+  }
+
   draw();
   requestAnimationFrame(loop);
 }
