@@ -5,6 +5,8 @@ import {
 } from "../systems/miasma.js";
 import { initEnemies, spawnEnemies, updateEnemies, drawEnemies } from "../systems/enemies.js";
 import { initHUD, updateHUD } from "../ui/hud.js";
+import { spawnPickup, updatePickups, drawPickups } from "../systems/pickups.js";
+
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d", { alpha: false });
@@ -20,7 +22,9 @@ const state = {
   keys: new Set(),
   health: 100,
   maxHealth: 100,
-  gameOver: false
+  gameOver: false,
+  scrap: 0,
+  pickups: [] // array of {x, y, type}
 };
 
 // ---- Resize ----
@@ -102,6 +106,8 @@ function update(dt) {
 
   updateMiasma(state, dt);
   updateEnemies(state, dt);
+  updatePickups(state, dt);
+
   
 // --- Contact damage from enemies ---
 const contactDPS = 10; // damage per second when touching
@@ -155,6 +161,9 @@ function draw() {
 
   // enemies first (under fog)
   drawEnemies(ctx, state, cx, cy);
+
+  drawPickups(ctx, state, cx, cy);
+
 
   // then fog over them
   drawMiasma(ctx, state, cx, cy, w, h);

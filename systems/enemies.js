@@ -1,6 +1,7 @@
 // systems/enemies.js
-// Minimal enemy system: spawn across map, only chase if close, die to laser
+import { spawnPickup } from "./pickups.js"; // adjust path if needed
 
+// Minimal enemy system: spawn across map, only chase if close, die to laser
 export function initEnemies(state, opts = {}) {
   state.enemies = {
     list: [],
@@ -16,7 +17,8 @@ export function initEnemies(state, opts = {}) {
     // combat
     baseHP: opts.baseHP ?? 100,
     laserDPS: opts.laserDPS ?? 180,
-    flashTime: opts.flashTime ?? 0.1
+    flashTime: opts.flashTime ?? 0.1,
+    contactDPS: opts.contactDPS ?? 50 // contact damage per second
   };
 }
 
@@ -39,10 +41,7 @@ export function updateEnemies(state, dt) {
   const cfg = state.enemies;
   const list = cfg.list;
   const px = state.camera.x, py = state.camera.y;
-
-  // Damage settings
-  const contactDPS = cfg.contactDPS ?? 50; // damage per second on touch
-  const playerR = state.player?.r ?? 18;   // derelict/player radius
+  const playerR = state.player?.r ?? 18;
 
   for (let i = list.length - 1; i >= 0; i--) {
     const m = list[i];
@@ -60,8 +59,7 @@ export function updateEnemies(state, dt) {
 
     // Contact damage
     if (dist <= m.r + playerR) {
-      state.player.hp -= contactDPS * dt;
-      // optional: flash player or knock enemy back
+      state.health -= cfg.contactDPS * dt;
     }
 
     // Laser damage
@@ -70,11 +68,13 @@ export function updateEnemies(state, dt) {
     // Hit flash decay
     m.flash = Math.max(0, m.flash - dt);
 
-    // Death cleanup
-    if (m.hp <= 0) list.splice(i, 1);
+    // Death cleanup + scrap drop
+    if (m.hp <= 0) {
+      spawnPickup(state, m.x, m.y, "scrap");
+      list.splice(i, 1);
+    }
   }
 }
-
 
 export function drawEnemies(ctx, state, cx, cy) {
   const cfg = state.enemies;
@@ -133,4 +133,6 @@ function distPointToSegmentSq(px, py, x1, y1, x2, y2) {
   return dx * dx + dy * dy;
 }
 
-function rand(min, max) { return Math.random() * (max - min) + min; }
+function rand(min, max) {
+  return Math.random() * (max - min) + min;
+}
