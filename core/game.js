@@ -6,6 +6,9 @@ import {
 import { initEnemies, spawnInitialEnemies, updateEnemies, drawEnemies } from "../systems/enemies.js";
 import { initHUD, updateHUD } from "../ui/hud.js";
 import { updatePickups, drawPickups } from "../systems/pickups.js";
+import { initWorld, clampToWorld, drawWorldBorder } from "../systems/world.js";
+
+
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d", { alpha: false });
@@ -70,6 +73,8 @@ initBeam(state, {
 });
 
 initMiasma(state, { tile: 5, cols: 450, rows: 450 });
+initWorld(state);
+
 
 // Enemies
 initEnemies(state, { max: 40 });   // population cap
@@ -96,6 +101,8 @@ function update(dt) {
     state.camera.x += vx * speed * dt;
     state.camera.y += vy * speed * dt;
   }
+
+  clampToWorld(state);
 
   updateMiasma(state, dt);
   updateEnemies(state, dt);     // includes contact damage + timed respawn
@@ -144,6 +151,9 @@ function draw() {
 
   // fog over them
   drawMiasma(ctx, state, cx, cy, w, h);
+
+    // world border (thick miasma wall)
+  drawWorldBorder(ctx, state, cx, cy);
 
   // beam on top
   drawBeam(ctx, state, cx, cy);
