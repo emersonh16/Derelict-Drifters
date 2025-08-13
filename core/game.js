@@ -89,12 +89,21 @@ function update(dt) {
   updateMiasma(state, dt);
   updateEnemies(state, dt);
 
-  // Miasma damage
-  const idx = worldToIdx(state.miasma, state.camera.x, state.camera.y);
-  if (isFog(state.miasma, idx)) {
-    state.health -= MIASMA_DPS * dt;
-    if (state.health < 0) state.health = 0;
+// Miasma damage – now uses full radius instead of center point
+const step = state.miasma.tile * 0.5; // sample step ~half tile
+let inFog = false;
+for (let dy = -state.player.r; dy <= state.player.r && !inFog; dy += step) {
+  for (let dx = -state.player.r; dx <= state.player.r; dx += step) {
+    if (dx*dx + dy*dy > state.player.r * state.player.r) continue;
+    const idx = worldToIdx(state.miasma, state.camera.x + dx, state.camera.y + dy);
+    if (isFog(state.miasma, idx)) { inFog = true; break; }
   }
+}
+if (inFog) {
+  state.health -= MIASMA_DPS * dt;
+  if (state.health < 0) state.health = 0;
+}
+
 
   // HUD last
   updateHUD(state);
