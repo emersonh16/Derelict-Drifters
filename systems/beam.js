@@ -1,4 +1,4 @@
-// systems/beam.js — half-size beam
+// systems/beam.js — half-size beam with distinct laser core
 
 export function initBeam(state, opts = {}) {
   state.beam = {
@@ -25,6 +25,11 @@ export function initBeam(state, opts = {}) {
     laserRange: opts.laserRange ?? 240, // was 480
     bumpRange:  opts.bumpRange  ?? 20,  // was 40
 
+    // laser visual tunables (TOP-LEVEL, not inside color)
+    laserCoreWidth:   opts.laserCoreWidth   ?? 8,   // px
+    laserOutlineMult: opts.laserOutlineMult ?? 2.0, // halo thickness = core * this
+    laserTipRadius:   opts.laserTipRadius   ?? 14,  // px
+
     // live, published each frame
     mode: 'none',
     range: 0,
@@ -34,13 +39,15 @@ export function initBeam(state, opts = {}) {
 
     // visuals
     color: {
-      main0: 'rgba(255, 215, 0, 0.25)',
-      main1: 'rgba(255, 215, 0, 0.12)',
-      main2: 'rgba(255, 215, 0, 0.00)',
+      main0:  'rgba(255, 215, 0, 0.25)',
+      main1:  'rgba(255, 215, 0, 0.12)',
+      main2:  'rgba(255, 215, 0, 0.00)',
       laser0: 'rgba(255, 250, 210, 0.85)',
       laser1: 'rgba(255, 230, 140, 0.50)',
       laser2: 'rgba(255, 230, 140, 0.00)',
-      tip:    'rgba(255, 253, 240, 0.95)'
+      tip:    'rgba(255, 253, 240, 0.95)',
+      core:   'rgba(255, 255, 255, 0.95)', // bright inner line
+      halo:   'rgba(255, 220, 120, 0.35)'  // soft outer halo
     }
   };
 }
@@ -115,18 +122,57 @@ function drawCone(ctx, cx, cy, halfArc, range, b) {
 }
 
 function drawLaser(ctx, cx, cy, halfArc, range, b) {
+  const ang = b.angle;
+  const x2 = cx + Math.cos(ang) * range;
+  const y2 = cy + Math.sin(ang) * range;
+
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
-  const g = ctx.createRadialGradient(cx, cy, 4, cx, cy, range);
-  g.addColorStop(0, b.color.laser0);
-  g.addColorStop(0.35, b.color.laser1);
-  g.addColorStop(1, b.color.laser2);
-  ctx.fillStyle = g;
+
+  // 1) Soft glow wedge (keeps your overall laser wash)
+  const coneGlow = ctx.createRadialGradient(cx, cy, 4, cx, cy, range);
+  coneGlow.addColorStop(0.00, b.color.laser0);
+  coneGlow.addColorStop(0.35, b.color.laser1);
+  coneGlow.addColorStop(1.00, b.color.laser2);
+  ctx.fillStyle = coneGlow;
   ctx.beginPath();
   ctx.moveTo(cx, cy);
-  ctx.arc(cx, cy, range, b.angle - halfArc, b.angle + halfArc);
+  ctx.arc(cx, cy, range, ang - halfArc, ang + halfArc);
   ctx.closePath();
   ctx.fill();
+
+  // 2) Outer halo line
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = b.color.halo;
+  ctx.lineWidth = Math.max(1, b.laserCoreWidth * b.laserOutlineMult);
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+
+  // 3) Bright core line
+  const coreGrad = ctx.createLinearGradient(cx, cy, x2, y2);
+  coreGrad.addColorStop(0.00, 'rgba(255,255,255,0.95)');
+  coreGrad.addColorStop(0.70, 'rgba(255,245,210,0.95)');
+  coreGrad.addColorStop(1.00, 'rgba(255,235,160,0.90)');
+  ctx.strokeStyle = coreGrad; // or use: b.color.core
+  ctx.lineWidth = b.laserCoreWidth;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+
+  // 4) Tip bloom
+  const tipR = b.laserTipRadius;
+  const tipGrad = ctx.createRadialGradient(x2, y2, 0, x2, y2, tipR);
+  tipGrad.addColorStop(0.00, b.color.tip);
+  tipGrad.addColorStop(1.00, 'rgba(255,255,255,0)');
+  ctx.fillStyle = tipGrad;
+  ctx.beginPath();
+  ctx.arc(x2, y2, tipR, 0, Math.PI * 2);
+  ctx.fill();
+
   ctx.restore();
 }
 
