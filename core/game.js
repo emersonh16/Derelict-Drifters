@@ -1,5 +1,6 @@
 import { initBeam, drawBeam, onWheelAdjust, getBeamGeom } from "../systems/beam.js";
 import { initMiasma, updateMiasma, drawMiasma, clearWithBeam } from "../systems/miasma.js";
+import { initEnemies, spawnEnemies, updateEnemies, drawEnemies } from "../systems/enemies.js";
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d", { alpha: false });
@@ -8,7 +9,7 @@ const state = {
   time: 0, dt: 0,
   mouse: { x: 0, y: 0 },
   camera: { x: 0, y: 0 },
-  player: { r: 18 },        // ← original derelict size restored
+  player: { r: 18 },
   keys: new Set()
 };
 
@@ -37,22 +38,23 @@ canvas.addEventListener("wheel", (e) => {
 }, { passive: false });
 
 // ---- Init ----
-// Beam = half size (bubble, cone, laser ranges halved)
 initBeam(state, { 
   startT: 0.7,
-  bubbleRMin: 16,   // was 32
-  bubbleRMax: 90,   // was 180
-  baseRange: 150,   // was 300
-  laserRange: 240,  // was 480
-  bumpRange: 20     // was 40
+  bubbleRMin: 16, bubbleRMax: 90,
+  baseRange: 150, laserRange: 240, bumpRange: 20
 });
 
-// Keep the small-tile miasma you already liked
-initMiasma(state, { 
-  tile: 7,          // half-size tiles (keep if you want the higher detail)
-  cols: 400, 
-  rows: 400 
+initMiasma(state, { tile: 7, cols: 400, rows: 400 });
+
+// NEW: enemies
+initEnemies(state, {
+  max: 24,
+  spawnRadius: 520,
+  minSpawnDist: 280,
+  baseHP: 120,
+  laserDPS: 180
 });
+spawnEnemies(state, 12);
 
 // ---- Update ----
 function update(dt) {
@@ -72,7 +74,8 @@ function update(dt) {
     state.camera.y += vy * speed * dt;
   }
 
-  updateMiasma(state, dt); // crystal regrowth
+  updateMiasma(state, dt);
+  updateEnemies(state, dt); // NEW
 }
 
 // ---- Draw ----
@@ -83,17 +86,26 @@ function draw() {
   ctx.fillStyle = "#0c0b10";
   ctx.fillRect(0, 0, w, h);
 
-  getBeamGeom(state, cx, cy);
-  clearWithBeam(state, cx, cy);
-  drawMiasma(ctx, state, cx, cy, w, h);
-  drawBeam(ctx, state, cx, cy);
+ getBeamGeom(state, cx, cy);
+clearWithBeam(state, cx, cy);
 
-  // Player marker (original size)
+// enemies first (under fog)
+drawEnemies(ctx, state, cx, cy);
+
+// then fog over them
+drawMiasma(ctx, state, cx, cy, w, h);
+
+// beam on top
+drawBeam(ctx, state, cx, cy);
+
+
+  // player
   ctx.fillStyle = "#9a3b31";
   ctx.beginPath();
   ctx.arc(cx, cy, state.player.r, 0, Math.PI * 2);
   ctx.fill();
 }
+
 
 // ---- Main Loop ----
 let last = performance.now();

@@ -54,8 +54,10 @@ export function initBeam(state, opts = {}) {
 
 export function onWheelAdjust(state, deltaY) {
   const b = state.beam;
-  b.t = clamp(b.t + Math.sign(deltaY) * b.step, 0, 1);
+  // invert: wheel down (deltaY > 0) => t goes DOWN; wheel up => t goes UP
+  b.t = clamp(b.t - Math.sign(deltaY) * b.step, 0, 1);
 }
+
 
 export function getBeamGeom(state, cx, cy) {
   const b = state.beam;
