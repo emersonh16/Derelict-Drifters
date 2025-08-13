@@ -108,10 +108,15 @@ export function updateEnemies(state, dt) {
     m.flash = Math.max(0, m.flash - dt);
 
     // Death -> pickup
-    if (m.hp <= 0) {
-      spawnPickup(state, m.x, m.y, "scrap");
-      list.splice(i, 1);
-    }
+ if (m.hp <= 0) {
+  if (Math.random() < 0.1) {
+    spawnPickup(state, m.x, m.y, "health"); // 10% chance
+  } else {
+    spawnPickup(state, m.x, m.y, "scrap");  // 90% chance
+  }
+  list.splice(i, 1);
+}
+
   }
 }
 
