@@ -18,7 +18,8 @@ const MIASMA_DPS = 35;
 
 const state = {
   time: 0, dt: 0,
-  mouse: { x: 0, y: 0 },
+  mouse: { x: 0, y: 0 },        // aim used for drawing/beam logic
+  pendingMouse: { x: 0, y: 0 }, // tracks mouse while paused
   camera: { x: 0, y: 0 },
   player: { r: 18 },
   keys: new Set(),
@@ -27,7 +28,8 @@ const state = {
   gameOver: false,
   scrap: 0,
   pickups: [], // {x, y, type, r}
-  damageFlash: 0
+  damageFlash: 0,
+  paused: false
 };
 
 // ---- Resize ----
@@ -36,23 +38,36 @@ function resize() {
   canvas.height = window.innerHeight;
   state.mouse.x = canvas.width / 2;
   state.mouse.y = canvas.height / 2;
+  state.pendingMouse.x = state.mouse.x;
+  state.pendingMouse.y = state.mouse.y;
 }
 window.addEventListener("resize", resize);
 resize();
 
 // ---- Input ----
-window.addEventListener("keydown", (e) => state.keys.add(e.key.toLowerCase()));
-window.addEventListener("keyup",   (e) => state.keys.delete(e.key.toLowerCase()));
 
 canvas.addEventListener("mousemove", (e) => {
   const rect = canvas.getBoundingClientRect();
-  state.mouse.x = e.clientX - rect.left;
-  state.mouse.y = e.clientY - rect.top;
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  if (state.paused) {
+    // Track separately while paused
+    state.pendingMouse.x = x;
+    state.pendingMouse.y = y;
+  } else {
+    // Live aim while unpaused
+    state.mouse.x = x;
+    state.mouse.y = y;
+  }
 });
+
 canvas.addEventListener("wheel", (e) => {
+  if (state.paused || state.gameOver) return; // ignore while paused
   onWheelAdjust(state, e.deltaY);
   e.preventDefault();
 }, { passive: false });
+
 
 // Restart (R)
 window.addEventListener("keydown", (e) => {
@@ -64,6 +79,28 @@ window.addEventListener("keydown", (e) => {
     spawnInitialEnemies(state, 40); // start full again (safe distance)
     state.gameOver = false;
   }
+});
+
+function togglePause() {
+  state.paused = !state.paused;
+  if (!state.paused) {
+    // snap aim to where the mouse moved while paused
+    state.mouse.x = state.pendingMouse.x;
+    state.mouse.y = state.pendingMouse.y;
+  }
+}
+
+window.addEventListener("keydown", (e) => {
+  if (e.code === "Space") {
+    e.preventDefault();
+    if (!state.gameOver) togglePause();
+    return;
+  }
+  state.keys.add(e.key.toLowerCase());
+});
+
+window.addEventListener("keyup", (e) => {
+  state.keys.delete(e.key.toLowerCase());
 });
 
 // ---- Init ----
@@ -146,8 +183,13 @@ function draw() {
   ctx.fillStyle = "#0c0b10";
   ctx.fillRect(0, 0, w, h);
 
-  getBeamGeom(state, cx, cy);
+getBeamGeom(state, cx, cy);
+
+// only allow side effects while active
+if (!state.paused && !state.gameOver) {
   clearWithBeam(state, cx, cy);
+}
+
 
   // enemies (under fog)
   drawEnemies(ctx, state, cx, cy);
@@ -175,6 +217,18 @@ function draw() {
 }
 
 
+// paused overlay
+if (state.paused && !state.gameOver) {
+  ctx.fillStyle = "rgba(0,0,0,0.5)";
+  ctx.fillRect(0, 0, w, h);
+
+  ctx.fillStyle = "white";
+  ctx.font = "bold 32px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("PAUSED — press Space", w / 2, 64);
+}
+
+
   // game over overlay
   if (state.gameOver) {
     ctx.fillStyle = "rgba(0,0,0,0.6)";
@@ -197,7 +251,7 @@ function loop(now) {
   last = now;
   state.dt = dt;
 
-  if (!state.gameOver) {
+  if (!state.gameOver && !state.paused) {
     update(dt);
   }
   draw();
