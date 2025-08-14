@@ -31,7 +31,11 @@ export function initMiasma(state, opts = {}) {
     // laser sweep tunables (on miasma for perf/caching)
     laserMinThicknessTiles: opts.laserMinThicknessTiles ?? 2.0,
     laserFanCount:          opts.laserFanCount          ?? 3,
-    laserFanMinDeg:         opts.laserFanMinDeg         ?? 0.25
+    laserFanMinDeg:         opts.laserFanMinDeg         ?? 0.25,
+
+    // NEW: damage per second when the player is in fog
+    dps: opts.dps ?? 35
+
   };
 }
 

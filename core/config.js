@@ -46,7 +46,9 @@ export const config = {
     // Laser sweep tuning
     laserMinThicknessTiles: 2.0,
     laserFanCount: 3,
-    laserFanMinDeg: 0.25
+    laserFanMinDeg: 0.25,
+
+    dps: 35
   },
 
   enemies: {
