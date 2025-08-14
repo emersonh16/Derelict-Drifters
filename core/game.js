@@ -67,17 +67,10 @@ canvas.addEventListener("wheel", (e) => {
 // Restart (R)
 window.addEventListener("keydown", (e) => {
   if (e.key.toLowerCase() === "r" && state.gameOver) {
-    state.health = state.maxHealth;
-    state.camera.x = 0;
-    state.camera.y = 0;
-    state.enemies.list.length = 0;
-    state.pickups.length = 0;
-    state.scrap = 0;
-    state.win = false;
-    spawnInitialEnemies(state, config.enemies.max);
-    state.gameOver = false;
+    startGame();
   }
 });
+
 
 function togglePause() {
   state.paused = !state.paused;
@@ -100,13 +93,42 @@ window.addEventListener("keyup", (e) => {
   state.keys.delete(e.key.toLowerCase());
 });
 
+function startGame() {
+  // base state
+  state.time = 0;
+  state.dt = 0;
+  state.keys.clear();
+  state.paused = false;
+  state.gameOver = false;
+  state.win = false;
+  state.damageFlash = 0;
+
+  // player / run
+  state.health = state.maxHealth;
+  state.scrap = 0;
+  state.pickups.length = 0;
+  state.camera.x = 0;
+  state.camera.y = 0;
+
+  // keep mouse centered (like a page refresh)
+  state.mouse.x = canvas.width / 2;
+  state.mouse.y = canvas.height / 2;
+  state.pendingMouse.x = state.mouse.x;
+  state.pendingMouse.y = state.mouse.y;
+
+  // world + systems (same order as first load)
+  initMiasma(state, config.miasma);                 // brand-new fog grid
+  initWorld(state, config.world);                   // world depends on miasma size
+  initBeam(state, config.beam);
+  initEnemies(state, config.enemies);
+  spawnInitialEnemies(state, config.enemies.max);
+  initHUD(state, config.hud);
+}
+
+
 // ---- Init ----
-initBeam(state, config.beam);
-initMiasma(state, config.miasma);
-initWorld(state, config.world);
-initEnemies(state, config.enemies);
-spawnInitialEnemies(state, config.enemies.max);
-initHUD(state, config.hud);
+startGame();
+
 
 // ---- Update ----
 function update(dt) {
