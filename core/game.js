@@ -29,7 +29,10 @@ const state = {
   scrap: 0,
   pickups: [], // {x, y, type, r}
   damageFlash: 0,
-  paused: false
+  paused: false,
+  win: false,
+  maxScrap: 20,
+
 };
 
 // ---- Resize ----
@@ -76,10 +79,14 @@ window.addEventListener("keydown", (e) => {
     state.camera.x = 0;
     state.camera.y = 0;
     state.enemies.list.length = 0;
+    state.pickups.length = 0;   // clear any leftover pickups
+    state.scrap = 0;            // reset scrap
+    state.win = false;          // clear win flag
     spawnInitialEnemies(state, 40); // start full again (safe distance)
     state.gameOver = false;
   }
 });
+
 
 function togglePause() {
   state.paused = !state.paused;
@@ -145,6 +152,13 @@ function update(dt) {
   updateMiasma(state, dt);
   updateEnemies(state, dt);     // includes contact damage + timed respawn
   updatePickups(state, dt);     // handle pickup collisions
+
+  // Win condition: collect enough scrap
+if (!state.gameOver && state.scrap >= state.maxScrap) {
+  state.win = true;
+  state.gameOver = true;   // freezes gameplay just like death
+}
+
 
   // Miasma damage (sample across player radius)
   const step = state.miasma.tile * 0.5;
@@ -231,16 +245,21 @@ if (state.paused && !state.gameOver) {
 
   // game over overlay
   if (state.gameOver) {
-    ctx.fillStyle = "rgba(0,0,0,0.6)";
-    ctx.fillRect(0, 0, w, h);
+   ctx.fillStyle = "rgba(0,0,0,0.6)";
+ctx.fillRect(0, 0, w, h);
 
-    ctx.fillStyle = "white";
-    ctx.font = "bold 64px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("GAME OVER", w / 2, h / 2);
+ctx.fillStyle = "white";
+ctx.font = "bold 64px sans-serif";
+ctx.textAlign = "center";
+const title = state.win ? "YOU WIN" : "GAME OVER";
+ctx.fillText(title, w / 2, h / 2);
 
-    ctx.font = "24px sans-serif";
-    ctx.fillText("Press R to Restart", w / 2, h / 2 + 50);
+// Only show restart hint if not a win
+if (!state.win) {
+  ctx.font = "24px sans-serif";
+  ctx.fillText("Press R to Restart", w / 2, h / 2 + 50);
+}
+
   }
 }
 
