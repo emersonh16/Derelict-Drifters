@@ -11,33 +11,33 @@ export function initBeam(state, opts = {}) {
     tBubbleEnd: opts.tBubbleEnd ?? 0.42,
     tConeEnd:   opts.tConeEnd   ?? 0.88,
 
-    // bubble shape (HALVED)
-    bubbleRMin: opts.bubbleRMin ?? 16,  // was 32
-    bubbleRMax: opts.bubbleRMax ?? 90,  // was 180
+    // bubble shape
+    bubbleRMin: opts.bubbleRMin ?? 16,
+    bubbleRMax: opts.bubbleRMax ?? 90,
 
     // cone/laser shape
     coneHalfArcWide:   toRad(opts.coneHalfArcWideDeg   ?? 60),
     coneHalfArcNarrow: toRad(opts.coneHalfArcNarrowDeg ?? 1.6),
-    laserMinHalfArc:   toRad(0.22),
+    laserMinHalfArc:   toRad(opts.laserMinHalfArcDeg   ?? 0.22),
 
-    // ranges (HALVED)
-    baseRange:  opts.baseRange  ?? 150, // was 300
-    laserRange: opts.laserRange ?? 240, // was 480
-    bumpRange:  opts.bumpRange  ?? 20,  // was 40
+    // ranges
+    baseRange:  opts.baseRange  ?? 150,
+    laserRange: opts.laserRange ?? 240,
+    bumpRange:  opts.bumpRange  ?? 20,
 
-    // laser visual tunables (TOP-LEVEL, not inside color)
-    laserCoreWidth:   opts.laserCoreWidth   ?? 8,   // px
-    laserOutlineMult: opts.laserOutlineMult ?? 2.0, // halo thickness = core * this
-    laserTipRadius:   opts.laserTipRadius   ?? 14,  // px
+    // laser visuals
+    laserCoreWidth:   opts.laserCoreWidth   ?? 8,
+    laserOutlineMult: opts.laserOutlineMult ?? 2.0,
+    laserTipRadius:   opts.laserTipRadius   ?? 14,
 
-    // live, published each frame
+    // live frame data
     mode: 'none',
     range: 0,
     halfArc: 0,
     angle: 0,
     radius: 0,
 
-    // visuals
+    // colors
     color: {
       main0:  'rgba(255, 215, 0, 0.25)',
       main1:  'rgba(255, 215, 0, 0.12)',
@@ -46,24 +46,17 @@ export function initBeam(state, opts = {}) {
       laser1: 'rgba(255, 230, 140, 0.50)',
       laser2: 'rgba(255, 230, 140, 0.00)',
       tip:    'rgba(255, 253, 240, 0.95)',
-      core:   'rgba(255, 255, 255, 0.95)', // bright inner line
-      halo:   'rgba(255, 220, 120, 0.35)'  // soft outer halo
+      core:   'rgba(255, 255, 255, 0.95)',
+      halo:   'rgba(255, 220, 120, 0.35)'
     }
   };
 }
 
 export function onWheelAdjust(state, deltaY) {
   const b = state.beam;
-
-  // Force: wheel down => toward laser, wheel up => toward off
-  const dir = deltaY > 0 ? -1 : 1;
-
+  const dir = deltaY > 0 ? -1 : 1; // wheel down => laser, wheel up => off
   b.t = clamp(b.t + dir * b.step, 0, 1);
-
-  console.log(deltaY);
-
 }
-
 
 export function getBeamGeom(state, cx, cy) {
   const b = state.beam;
@@ -83,7 +76,7 @@ export function getBeamGeom(state, cx, cy) {
   if (t <= b.tConeEnd) {
     const u = invLerp(b.tBubbleEnd, b.tConeEnd, t);
     const halfArc = lerp(b.coneHalfArcWide, b.coneHalfArcNarrow, u);
-    const range = lerp(b.baseRange + b.bumpRange, b.laserRange, u); // narrower → farther
+    const range = lerp(b.baseRange + b.bumpRange, b.laserRange, u);
     return Object.assign(b, { mode: 'cone', range, halfArc, angle: ang, radius: 0 });
   }
 
@@ -137,7 +130,7 @@ function drawLaser(ctx, cx, cy, halfArc, range, b) {
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
 
-  // 1) Soft glow wedge (keeps your overall laser wash)
+  // glow wedge
   const coneGlow = ctx.createRadialGradient(cx, cy, 4, cx, cy, range);
   coneGlow.addColorStop(0.00, b.color.laser0);
   coneGlow.addColorStop(0.35, b.color.laser1);
@@ -149,7 +142,7 @@ function drawLaser(ctx, cx, cy, halfArc, range, b) {
   ctx.closePath();
   ctx.fill();
 
-  // 2) Outer halo line
+  // halo line
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   ctx.strokeStyle = b.color.halo;
@@ -159,26 +152,25 @@ function drawLaser(ctx, cx, cy, halfArc, range, b) {
   ctx.lineTo(x2, y2);
   ctx.stroke();
 
-  // 3) Bright core line
+  // core line
   const coreGrad = ctx.createLinearGradient(cx, cy, x2, y2);
   coreGrad.addColorStop(0.00, 'rgba(255,255,255,0.95)');
   coreGrad.addColorStop(0.70, 'rgba(255,245,210,0.95)');
   coreGrad.addColorStop(1.00, 'rgba(255,235,160,0.90)');
-  ctx.strokeStyle = coreGrad; // or use: b.color.core
+  ctx.strokeStyle = coreGrad;
   ctx.lineWidth = b.laserCoreWidth;
   ctx.beginPath();
   ctx.moveTo(cx, cy);
   ctx.lineTo(x2, y2);
   ctx.stroke();
 
-  // 4) Tip bloom
-  const tipR = b.laserTipRadius;
-  const tipGrad = ctx.createRadialGradient(x2, y2, 0, x2, y2, tipR);
+  // tip bloom
+  const tipGrad = ctx.createRadialGradient(x2, y2, 0, x2, y2, b.laserTipRadius);
   tipGrad.addColorStop(0.00, b.color.tip);
   tipGrad.addColorStop(1.00, 'rgba(255,255,255,0)');
   ctx.fillStyle = tipGrad;
   ctx.beginPath();
-  ctx.arc(x2, y2, tipR, 0, Math.PI * 2);
+  ctx.arc(x2, y2, b.laserTipRadius, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.restore();

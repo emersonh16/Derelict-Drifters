@@ -1,3 +1,5 @@
+// core/game.js
+import { config } from "../core/config.js";
 import { initBeam, drawBeam, onWheelAdjust, getBeamGeom } from "../systems/beam.js";
 import {
   initMiasma, updateMiasma, drawMiasma, clearWithBeam,
@@ -8,13 +10,8 @@ import { initHUD, updateHUD } from "../ui/hud.js";
 import { updatePickups, drawPickups } from "../systems/pickups.js";
 import { initWorld, clampToWorld, drawWorldBorder } from "../systems/world.js";
 
-
-
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d", { alpha: false });
-
-// Top-level constants
-const MIASMA_DPS = 35;
 
 const state = {
   time: 0, dt: 0,
@@ -31,8 +28,7 @@ const state = {
   damageFlash: 0,
   paused: false,
   win: false,
-  maxScrap: 20,
-
+  maxScrap: config.game.winScrap
 };
 
 // ---- Resize ----
@@ -48,29 +44,25 @@ window.addEventListener("resize", resize);
 resize();
 
 // ---- Input ----
-
 canvas.addEventListener("mousemove", (e) => {
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
 
   if (state.paused) {
-    // Track separately while paused
     state.pendingMouse.x = x;
     state.pendingMouse.y = y;
   } else {
-    // Live aim while unpaused
     state.mouse.x = x;
     state.mouse.y = y;
   }
 });
 
 canvas.addEventListener("wheel", (e) => {
-  if (state.paused || state.gameOver) return; // ignore while paused
+  if (state.paused || state.gameOver) return;
   onWheelAdjust(state, e.deltaY);
   e.preventDefault();
 }, { passive: false });
-
 
 // Restart (R)
 window.addEventListener("keydown", (e) => {
@@ -79,19 +71,17 @@ window.addEventListener("keydown", (e) => {
     state.camera.x = 0;
     state.camera.y = 0;
     state.enemies.list.length = 0;
-    state.pickups.length = 0;   // clear any leftover pickups
-    state.scrap = 0;            // reset scrap
-    state.win = false;          // clear win flag
-    spawnInitialEnemies(state, 40); // start full again (safe distance)
+    state.pickups.length = 0;
+    state.scrap = 0;
+    state.win = false;
+    spawnInitialEnemies(state, config.enemies.max);
     state.gameOver = false;
   }
 });
 
-
 function togglePause() {
   state.paused = !state.paused;
   if (!state.paused) {
-    // snap aim to where the mouse moved while paused
     state.mouse.x = state.pendingMouse.x;
     state.mouse.y = state.pendingMouse.y;
   }
@@ -111,22 +101,12 @@ window.addEventListener("keyup", (e) => {
 });
 
 // ---- Init ----
-initBeam(state, {
-  startT: 0.42,
-  bubbleRMin: 16, bubbleRMax: 90,
-  baseRange: 150, laserRange: 240, bumpRange: 20
-});
-
-initMiasma(state, { tile: 5, cols: 450, rows: 450 });
-initWorld(state);
-
-
-// Enemies
-initEnemies(state, { max: 40 });   // population cap
-spawnInitialEnemies(state, 40);    // start full (safe distance from player)
-
-// HUD
-initHUD(state);
+initBeam(state, config.beam);
+initMiasma(state, config.miasma);
+initWorld(state, config.world);
+initEnemies(state, config.enemies);
+spawnInitialEnemies(state, config.enemies.max);
+initHUD(state, config.hud);
 
 // ---- Update ----
 function update(dt) {
@@ -150,17 +130,16 @@ function update(dt) {
   clampToWorld(state);
 
   updateMiasma(state, dt);
-  updateEnemies(state, dt);     // includes contact damage + timed respawn
-  updatePickups(state, dt);     // handle pickup collisions
+  updateEnemies(state, dt);
+  updatePickups(state, dt);
 
-  // Win condition: collect enough scrap
-if (!state.gameOver && state.scrap >= state.maxScrap) {
-  state.win = true;
-  state.gameOver = true;   // freezes gameplay just like death
-}
+  // Win condition
+  if (!state.gameOver && state.scrap >= state.maxScrap) {
+    state.win = true;
+    state.gameOver = true;
+  }
 
-
-  // Miasma damage (sample across player radius)
+  // Miasma damage
   const step = state.miasma.tile * 0.5;
   let inFog = false;
   for (let dy = -state.player.r; dy <= state.player.r && !inFog; dy += step) {
@@ -171,21 +150,18 @@ if (!state.gameOver && state.scrap >= state.maxScrap) {
     }
   }
   if (inFog) {
-  state.health -= MIASMA_DPS * dt;
-  state.damageFlash = 0.2; // trigger red flash
-  if (state.health < 0) state.health = 0;
-}
+    state.health -= config.game.miasmaDPS * dt;
+    state.damageFlash = 0.2;
+    if (state.health < 0) state.health = 0;
+  }
 
-state.damageFlash = Math.max(0, state.damageFlash - dt);
+  state.damageFlash = Math.max(0, state.damageFlash - dt);
 
-
-  // Game over gate
   if (state.health <= 0 && !state.gameOver) {
     state.health = 0;
     state.gameOver = true;
   }
 
-  // HUD last
   updateHUD(state);
 }
 
@@ -197,69 +173,54 @@ function draw() {
   ctx.fillStyle = "#0c0b10";
   ctx.fillRect(0, 0, w, h);
 
-getBeamGeom(state, cx, cy);
+  getBeamGeom(state, cx, cy);
 
-// only allow side effects while active
-if (!state.paused && !state.gameOver) {
-  clearWithBeam(state, cx, cy);
-}
+  if (!state.paused && !state.gameOver) {
+    clearWithBeam(state, cx, cy);
+  }
 
-
-  // enemies (under fog)
   drawEnemies(ctx, state, cx, cy);
-  // pickups (under fog so they feel embedded)
   drawPickups(ctx, state, cx, cy);
-
-  // fog over them
   drawMiasma(ctx, state, cx, cy, w, h);
-
-    // world border (thick miasma wall)
   drawWorldBorder(ctx, state, cx, cy);
-
-  // beam on top
   drawBeam(ctx, state, cx, cy);
 
-  // player
   ctx.fillStyle = "#9a3b31";
   ctx.beginPath();
   ctx.arc(cx, cy, state.player.r, 0, Math.PI * 2);
   ctx.fill();
 
   if (state.damageFlash > 0) {
-  ctx.fillStyle = `rgba(255,0,0,${state.damageFlash * 0.5})`;
-  ctx.fillRect(0, 0, w, h);
-}
+    ctx.fillStyle = `rgba(255,0,0,${state.damageFlash * 0.5})`;
+    ctx.fillRect(0, 0, w, h);
+  }
 
+  // paused overlay
+  if (state.paused && !state.gameOver) {
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(0, 0, w, h);
 
-// paused overlay
-if (state.paused && !state.gameOver) {
-  ctx.fillStyle = "rgba(0,0,0,0.5)";
-  ctx.fillRect(0, 0, w, h);
-
-  ctx.fillStyle = "white";
-  ctx.font = "bold 32px sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText("PAUSED — press Space", w / 2, 64);
-}
-
+    ctx.fillStyle = "white";
+    ctx.font = "bold 32px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("PAUSED — press Space", w / 2, 64);
+  }
 
   // game over overlay
   if (state.gameOver) {
-   ctx.fillStyle = "rgba(0,0,0,0.6)";
-ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.fillRect(0, 0, w, h);
 
-ctx.fillStyle = "white";
-ctx.font = "bold 64px sans-serif";
-ctx.textAlign = "center";
-const title = state.win ? "YOU WIN" : "GAME OVER";
-ctx.fillText(title, w / 2, h / 2);
+    ctx.fillStyle = "white";
+    ctx.font = "bold 64px sans-serif";
+    ctx.textAlign = "center";
+    const title = state.win ? "YOU WIN" : "GAME OVER";
+    ctx.fillText(title, w / 2, h / 2);
 
-// Only show restart hint if not a win
-if (!state.win) {
-  ctx.font = "24px sans-serif";
-  ctx.fillText("Press R to Restart", w / 2, h / 2 + 50);
-}
-
+    if (!state.win) {
+      ctx.font = "24px sans-serif";
+      ctx.fillText("Press R to Restart", w / 2, h / 2 + 50);
+    }
   }
 }
 

@@ -1,11 +1,13 @@
 // systems/world.js
-export function initWorld(state) {
+export function initWorld(state, opts = {}) {
   const s = state.miasma, t = s.tile;
   state.world = {
     minX: -s.halfCols * t,
     maxX:  s.halfCols * t,
     minY: -s.halfRows * t,
-    maxY:  s.halfRows * t
+    maxY:  s.halfRows * t,
+    borderThickness: opts.borderThickness ?? 80,
+    borderColor: opts.borderColor ?? 'rgba(120, 60, 160, 0.7)'
   };
 }
 
@@ -20,19 +22,18 @@ export function clampToWorld(state) {
 
 function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
 
-
 // Draw a thick miasma "wall" around the world
 export function drawWorldBorder(ctx, state, cx, cy) {
   const w = state.world;
   if (!w) return;
 
-  const thickness = 80; // how "thick" the miasma wall looks
-  const color = 'rgba(120, 60, 160, 0.7)'; // same purple as miasma, more opaque
+  const thickness = w.borderThickness;
+  const color = w.borderColor;
 
   ctx.save();
+  ctx.fillStyle = color;
 
   // Top border
-  ctx.fillStyle = color;
   ctx.fillRect(
     w.minX - state.camera.x + cx - thickness,
     w.minY - thickness - state.camera.y + cy,

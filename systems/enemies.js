@@ -2,13 +2,12 @@
 import { spawnPickup } from "./pickups.js";
 
 export function initEnemies(state, opts = {}) {
-  // Use full miasma grid; fall back to halfCols*2 if cols/rows aren't present
   const cols = state.miasma.cols ?? (state.miasma.halfCols * 2);
   const rows = state.miasma.rows ?? (state.miasma.halfRows * 2);
 
   state.enemies = {
     list: [],
-    max: opts.max ?? 40,            // total enemies allowed
+    max: opts.max ?? 40,
     worldW: cols * state.miasma.tile,
     worldH: rows * state.miasma.tile,
 
@@ -20,7 +19,6 @@ export function initEnemies(state, opts = {}) {
     flashTime: opts.flashTime ?? 0.1,
     contactDPS: opts.contactDPS ?? 50,
 
-    // spawn cadence + safe distances
     spawnEvery: opts.spawnEvery ?? 2.5,
     safeDistInitial: opts.safeDistInitial ?? 250,
     safeDistTrickle: opts.safeDistTrickle ?? 200,
@@ -29,11 +27,6 @@ export function initEnemies(state, opts = {}) {
   };
 }
 
-// ---------------------------------
-// Spawning: strictly inside miasma
-// ---------------------------------
-// We pick integer grid cells within [-halfCols..halfCols-1] / [-halfRows..halfRows-1]
-// and convert to *tile center* world coords. No fog check — just “inside the square”.
 function spawnEnemies(state, count = 1, minDistFromPlayer = 150) {
   const cfg = state.enemies;
   const out = cfg.list;
@@ -63,21 +56,17 @@ function spawnEnemies(state, count = 1, minDistFromPlayer = 150) {
   }
 }
 
-// Call once at game start
 export function spawnInitialEnemies(state, count = 40) {
   spawnEnemies(state, count, state.enemies.safeDistInitial);
 }
 
-// --------------------
-// Update / AI / Combat
-// --------------------
 export function updateEnemies(state, dt) {
   const cfg = state.enemies;
   const list = cfg.list;
   const px = state.camera.x, py = state.camera.y;
   const playerR = state.player?.r ?? 18;
 
-  // World-wide trickle spawns (still inside the miasma square)
+  // trickle spawns
   cfg.spawnTimer += dt;
   if (list.length < cfg.max && cfg.spawnTimer >= cfg.spawnEvery) {
     cfg.spawnTimer = 0;
@@ -89,34 +78,32 @@ export function updateEnemies(state, dt) {
     let dx = px - m.x, dy = py - m.y;
     const dist = Math.hypot(dx, dy) || 1;
 
-    // Simple chase within detection radius
+    // chase
     if (dist <= cfg.detectRadius) {
       dx /= dist; dy /= dist;
       m.x += dx * cfg.speed * dt;
       m.y += dy * cfg.speed * dt;
     }
 
-    // Contact damage
-   if (dist <= m.r + playerR) {
-  state.health -= cfg.contactDPS * dt;
-  state.damageFlash = 0.2; // flash for 0.2s
-}
+    // contact damage
+    if (dist <= m.r + playerR) {
+      state.health -= cfg.contactDPS * dt;
+      state.damageFlash = 0.2;
+    }
 
-
-    // Laser damage + flash
+    // laser damage
     applyLaserDamage(state, m, dt);
     m.flash = Math.max(0, m.flash - dt);
 
-    // Death -> pickup
- if (m.hp <= 0) {
-  if (Math.random() < 0.1) {
-    spawnPickup(state, m.x, m.y, "health"); // 10% chance
-  } else {
-    spawnPickup(state, m.x, m.y, "scrap");  // 90% chance
-  }
-  list.splice(i, 1);
-}
-
+    // death + drop
+    if (m.hp <= 0) {
+      if (Math.random() < 0.1) {
+        spawnPickup(state, m.x, m.y, "health");
+      } else {
+        spawnPickup(state, m.x, m.y, "scrap");
+      }
+      list.splice(i, 1);
+    }
   }
 }
 
@@ -172,6 +159,5 @@ function distPointToSegmentSq(px, py, x1, y1, x2, y2) {
 }
 
 function randInt(min, max) {
-  // inclusive range
   return (min + Math.floor(Math.random() * (max - min + 1)));
 }
