@@ -1,8 +1,13 @@
 // core/config.js
 export const config = {
-  game: {
+   game: {
     miasmaDPS: 35,     // damage per second in fog
-    winScrap: 20       // scrap required to win
+    winScrap: 20,      // scrap required to win
+
+    // Laser energy settings
+    maxLaserEnergy: 100,   // total capacity
+    laserDrainRate: 20,    // energy per second while in laser mode
+    laserRechargeRate: 10  // energy per second when not in laser mode
   },
 
   beam: {

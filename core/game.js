@@ -29,7 +29,9 @@ const state = {
   damageFlash: 0,
   paused: false,
   win: false,
-  maxScrap: config.game.winScrap
+  maxScrap: config.game.winScrap,
+  laserEnergy: config.game.maxLaserEnergy,   // starts full
+  maxLaserEnergy: config.game.maxLaserEnergy
 };
 
 // ---- Resize ----
@@ -190,6 +192,24 @@ function update(dt) {
     state.health = 0;
     state.gameOver = true;
   }
+
+  // --- Laser energy drain/recharge ---
+  const beam = state.beam;
+  if (beam.mode === "laser") {
+    state.laserEnergy -= config.game.laserDrainRate * dt;
+    if (state.laserEnergy <= 0) {
+      state.laserEnergy = 0;
+      // auto shut off laser if empty
+      beam.t = beam.tConeEnd - 0.01; // forces it back to cone mode
+      getBeamGeom(state, canvas.width / 2, canvas.height / 2);
+    }
+  } else {
+    state.laserEnergy = Math.min(
+      state.maxLaserEnergy,
+      state.laserEnergy + config.game.laserRechargeRate * dt
+    );
+  }
+
 
   updateHUD(state);
 }

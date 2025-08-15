@@ -27,15 +27,20 @@ if (shape === "circle") {
   state.obstacles.push({
     shape,
     x, y,
-    r: tileSize * (3 + Math.random() * 6) // bigger radius
+    // Bigger base size + more variation
+    r: tileSize * (8 + Math.random() * 6) // 8–14 tiles in radius
   });
 } else {
+  // Random rectangles with bigger min/max
+  const rectW = tileSize * (10 + Math.random() * 8); // 10–18 tiles wide
+  const rectH = tileSize * (10 + Math.random() * 8); // 10–18 tiles tall
   state.obstacles.push({
     shape,
     x, y,
-    w: tileSize * (4 + Math.random() * 7), // bigger width
-    h: tileSize * (4 + Math.random() * 7)  // bigger height
+    w: rectW,
+    h: rectH
   });
+
 }
 
   }

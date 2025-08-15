@@ -1,4 +1,3 @@
-// ui/hud.js
 var els = null;
 
 export function initHUD(state, opts = {}) {
@@ -24,14 +23,22 @@ export function initHUD(state, opts = {}) {
   root.innerHTML =
     `<div style="margin-bottom:6px;">HP: <span id="hud-hp-num"></span></div>` +
     `<div style="position:relative;width:${barW}px;height:${barH}px;border-radius:6px;` +
-      `background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);overflow:hidden;margin-bottom:8px;">` +
+      `background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);overflow:hidden;margin-bottom:4px;">` +
       `<div id="hud-hp-fill" style="position:absolute;left:0;top:0;bottom:0;width:0;background:${hpFillColor};"></div>` +
     `</div>` +
+
+    // New Laser Energy Bar
+    `<div style="position:relative;width:${barW}px;height:${barH}px;border-radius:6px;` +
+      `background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);overflow:hidden;margin-bottom:8px;">` +
+      `<div id="hud-laser-fill" style="position:absolute;left:0;top:0;bottom:0;width:0;background:yellow;"></div>` +
+    `</div>` +
+
     `<div>Scrap: <span id="hud-scrap-num"></span></div>`;
 
   els = {
     hpNum:    root.querySelector('#hud-hp-num'),
     hpFill:   root.querySelector('#hud-hp-fill'),
+    laserFill: root.querySelector('#hud-laser-fill'), // NEW
     scrapNum: root.querySelector('#hud-scrap-num')
   };
 
@@ -51,6 +58,10 @@ export function updateHUD(state) {
   var num = (state && typeof state.health === 'number') ? state.health : 0;
   var pct = Math.max(0, Math.min(1, num / denom));
   els.hpFill.style.width = (pct * 100).toFixed(1) + '%';
+
+  // --- Laser Energy ---
+  var energyPct = Math.max(0, Math.min(1, state.laserEnergy / state.maxLaserEnergy));
+  els.laserFill.style.width = (energyPct * 100).toFixed(1) + '%';
 
   // --- Scrap ---
   var scrap = Math.round((state && typeof state.scrap === 'number') ? state.scrap : 0);
