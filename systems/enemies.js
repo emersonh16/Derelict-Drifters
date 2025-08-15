@@ -1,5 +1,6 @@
 // systems/enemies.js
 import { spawnPickup } from "./pickups.js";
+import { collideWithObstacles } from "./world.js";
 
 export function initEnemies(state, opts = {}) {
   const cols = state.miasma.cols ?? (state.miasma.halfCols * 2);
@@ -83,6 +84,9 @@ export function updateEnemies(state, dt) {
       dx /= dist; dy /= dist;
       m.x += dx * cfg.speed * dt;
       m.y += dy * cfg.speed * dt;
+
+      // Prevent enemy from passing through obstacles
+      collideWithObstacles(state, m, m.r);
     }
 
     // contact damage

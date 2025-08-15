@@ -8,7 +8,8 @@ import {
 import { initEnemies, spawnInitialEnemies, updateEnemies, drawEnemies } from "../systems/enemies.js";
 import { initHUD, updateHUD } from "../ui/hud.js";
 import { updatePickups, drawPickups } from "../systems/pickups.js";
-import { initWorld, clampToWorld, drawWorldBorder } from "../systems/world.js";
+import { initWorld, clampToWorld, drawWorldBorder, drawObstacles, collideWithObstacles } from "../systems/world.js";
+
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d", { alpha: false });
@@ -143,10 +144,14 @@ function update(dt) {
 
   if (vx || vy) {
     const len = Math.hypot(vx, vy) || 1;
-    vx /= len; vy /= len;
+    vx /= len; 
+    vy /= len;
     const speed = 240;
     state.camera.x += vx * speed * dt;
     state.camera.y += vy * speed * dt;
+
+    // Prevent player from passing through obstacles
+    collideWithObstacles(state, state.camera, state.player.r);
   }
 
   clampToWorld(state);
@@ -154,6 +159,7 @@ function update(dt) {
   updateMiasma(state, dt);
   updateEnemies(state, dt);
   updatePickups(state, dt);
+
 
   // Win condition
   if (!state.gameOver && state.scrap >= state.maxScrap) {
@@ -202,11 +208,12 @@ function draw() {
     clearWithBeam(state, cx, cy);
   }
 
-  drawEnemies(ctx, state, cx, cy);
-  drawPickups(ctx, state, cx, cy);
-  drawMiasma(ctx, state, cx, cy, w, h);
-  drawWorldBorder(ctx, state, cx, cy);
-  drawBeam(ctx, state, cx, cy);
+drawObstacles(ctx, state, cx, cy); // draw terrain first
+drawEnemies(ctx, state, cx, cy);
+drawPickups(ctx, state, cx, cy);
+drawMiasma(ctx, state, cx, cy, w, h);
+drawWorldBorder(ctx, state, cx, cy);
+drawBeam(ctx, state, cx, cy);
 
   ctx.fillStyle = "#9a3b31";
   ctx.beginPath();
