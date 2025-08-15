@@ -66,3 +66,41 @@ export function drawDrill(ctx, state, cx, cy) {
 
   ctx.restore();
 }
+
+
+export function getDrillTriangleWorld(state) {
+  const { length, width, offset, playerRadius } = state.drill;
+  const halfW = width * 0.5;
+
+  // Player world position
+  const px = state.camera.x, py = state.camera.y;
+
+  // Use window size for screen center (drill aims in screen space)
+  const cx = (typeof window !== "undefined" ? window.innerWidth  * 0.5 : 0);
+  const cy = (typeof window !== "undefined" ? window.innerHeight * 0.5 : 0);
+  const ang = Math.atan2(state.mouse.y - cy, state.mouse.x - cx);
+
+  // Keep base inside circle
+  const safeOffset = Math.max(offset, playerRadius - halfW - 1);
+
+  const baseX = px + Math.cos(ang) * safeOffset;
+  const baseY = py + Math.sin(ang) * safeOffset;
+  const tipX  = px + Math.cos(ang) * (safeOffset + length);
+  const tipY  = py + Math.sin(ang) * (safeOffset + length);
+
+  const nx = -Math.sin(ang), ny = Math.cos(ang);
+  const a = { x: baseX + nx * halfW, y: baseY + ny * halfW };
+  const b = { x: tipX, y: tipY };
+  const c = { x: baseX - nx * halfW, y: baseY - ny * halfW };
+
+  return {
+    a, b, c,
+    aabb: {
+      minX: Math.min(a.x, b.x, c.x),
+      maxX: Math.max(a.x, b.x, c.x),
+      minY: Math.min(a.y, b.y, c.y),
+      maxY: Math.max(a.y, b.y, c.y)
+    }
+  };
+}
+

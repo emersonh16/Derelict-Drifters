@@ -246,6 +246,69 @@ function clamp01Projection(a, b, p0, p1) {
   return t;
 }
 
+
+
+export function carveObstaclesWithDrillTri(state, tri, dt, pad = 2) {
+  const obs = state.obstacles;
+  if (!obs || !obs.length || !tri) return;
+
+  const cut = {
+    minX: tri.aabb.minX - pad,
+    maxX: tri.aabb.maxX + pad,
+    minY: tri.aabb.minY - pad,
+    maxY: tri.aabb.maxY + pad
+  };
+
+  for (let i = obs.length - 1; i >= 0; i--) {
+    const o = obs[i];
+    if (o.shape === "rect") {
+      const rx = o.x - o.w / 2;
+      const ry = o.y - o.h / 2;
+      if (!aabbOverlap(rx, ry, o.w, o.h, cut.minX, cut.minY, cut.maxX - cut.minX, cut.maxY - cut.minY))
+        continue;
+
+      const pieces = subtractRectByAABB(rx, ry, o.w, o.h, cut.minX, cut.minY, cut.maxX - cut.minX, cut.maxY - cut.minY);
+      obs.splice(i, 1, ...pieces.map(p => ({
+        shape: "rect",
+        x: p.x + p.w / 2,
+        y: p.y + p.h / 2,
+        w: p.w,
+        h: p.h
+      })));
+    }
+    else if (o.shape === "circle") {
+      if (aabbCircleOverlap(cut.minX, cut.minY, cut.maxX - cut.minX, cut.maxY - cut.minY, o.x, o.y, o.r)) {
+        o.r -= 60 * dt; // grind speed
+        if (o.r <= 6) obs.splice(i, 1);
+      }
+    }
+  }
+}
+
+// helpers...
+function aabbOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
+  return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+}
+function aabbCircleOverlap(ax, ay, aw, ah, cx, cy, r) {
+  const nx = Math.max(ax, Math.min(cx, ax + aw));
+  const ny = Math.max(ay, Math.min(cy, ay + ah));
+  const dx = cx - nx, dy = cy - ny;
+  return dx * dx + dy * dy <= r * r;
+}
+function subtractRectByAABB(rx, ry, rw, rh, cx, cy, cw, ch) {
+  const left   = Math.max(rx, Math.min(rx + rw, cx));
+  const right  = Math.max(rx, Math.min(rx + rw, cx + cw));
+  const top    = Math.max(ry, Math.min(ry + rh, cy));
+  const bottom = Math.max(ry, Math.min(ry + rh, cy + ch));
+  if (left >= right || top >= bottom) return [{ x: rx, y: ry, w: rw, h: rh }];
+  const out = [];
+  if (top > ry) out.push({ x: rx, y: ry, w: rw, h: top - ry });
+  if (ry + rh > bottom) out.push({ x: rx, y: bottom, w: rw, h: (ry + rh) - bottom });
+  if (left > rx) out.push({ x: rx, y: top, w: left - rx, h: bottom - top });
+  if (rx + rw > right) out.push({ x: right, y: top, w: (rx + rw) - right, h: bottom - top });
+  return out.filter(r => r.w > 2 && r.h > 2);
+}
+
 // --- Utils -----------------------------------------------------------------
 
 function randRange(min, max) {

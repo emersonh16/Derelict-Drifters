@@ -8,8 +8,9 @@ import {
 import { initEnemies, spawnInitialEnemies, updateEnemies, drawEnemies } from "../systems/enemies.js";
 import { initHUD, updateHUD } from "../ui/hud.js";
 import { updatePickups, drawPickups } from "../systems/pickups.js";
-import { initWorld, clampToWorld, drawWorldBorder, drawObstacles, collideWithObstacles, carveObstaclesWithDrill } from "../systems/world.js";
-import { initDrill, drawDrill } from "../systems/drill.js";
+import { initWorld, clampToWorld, drawWorldBorder, drawObstacles, collideWithObstacles, carveObstaclesWithDrillTri } from "../systems/world.js";
+import { initDrill, drawDrill, getDrillTriangleWorld } from "../systems/drill.js";
+
 
 
 
@@ -170,36 +171,13 @@ function update(dt) {
 
   clampToWorld(state);
 
-// --- Drill carving (always on when drill is selected) ---
+
+// --- Drill carving using triangle hitbox ---
 if (state.activeWeapon === "drill" && state.drill) {
-  // We aim in SCREEN space (player is at center cx,cy), then convert to WORLD for carving
-  const cx = canvas.width * 0.5;
-  const cy = canvas.height * 0.5;
-
-  const ang = Math.atan2(state.mouse.y - cy, state.mouse.x - cx);
-
-  const r = state.player.r;
-  const length = state.drill.length;
-  const width  = state.drill.width;
-  const halfW  = width * 0.5;
-
-  // Keep base fully inside player circle (same logic as draw)
-  const safeOffset = Math.max(state.drill.offset ?? 0, r - halfW - 1);
-
-  const px = state.camera.x, py = state.camera.y; // player world pos
-
-  const baseX = px + Math.cos(ang) * safeOffset;
-  const baseY = py + Math.sin(ang) * safeOffset;
-  const tipX  = px + Math.cos(ang) * (safeOffset + length);
-  const tipY  = py + Math.sin(ang) * (safeOffset + length);
-
-  carveObstaclesWithDrill(
-    state,
-    { x: baseX, y: baseY },
-    { x: tipX,  y: tipY  },
-    halfW
-  );
+  const tri = getDrillTriangleWorld(state);
+  carveObstaclesWithDrillTri(state, tri, dt, 2); // pad=2 for small buffer
 }
+
 
 
 
