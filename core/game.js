@@ -9,6 +9,9 @@ import { initEnemies, spawnInitialEnemies, updateEnemies, drawEnemies } from "..
 import { initHUD, updateHUD } from "../ui/hud.js";
 import { updatePickups, drawPickups } from "../systems/pickups.js";
 import { initWorld, clampToWorld, drawWorldBorder, drawObstacles, collideWithObstacles } from "../systems/world.js";
+import { initTextures } from "./textures.js";
+
+
 
 
 const canvas = document.getElementById("game");
@@ -125,8 +128,18 @@ function startGame() {
   initBeam(state, config.beam);
   initEnemies(state, config.enemies);
   spawnInitialEnemies(state, config.enemies.max);
+
+  // Load paper image and build a seamless tile (async)
+  initTextures(state, {
+    paperUrl: "assets/paper_source.jpg", // <- your image
+    paperScale: 1.6,                     // crinkle size (try 1.3–2.0)
+    tileSize: 512                        // output tile resolution
+  });
+
   initHUD(state, config.hud);
+
 }
+
 
 
 // ---- Init ----
@@ -235,10 +248,9 @@ drawMiasma(ctx, state, cx, cy, w, h);
 drawWorldBorder(ctx, state, cx, cy);
 drawBeam(ctx, state, cx, cy);
 
-  ctx.fillStyle = "#9a3b31";
-  ctx.beginPath();
-  ctx.arc(cx, cy, state.player.r, 0, Math.PI * 2);
-  ctx.fill();
+  // Player (derelict) with world-locked paper texture
+  drawDerelict(ctx, state, cx, cy);
+
 
   if (state.damageFlash > 0) {
     ctx.fillStyle = `rgba(255,0,0,${state.damageFlash * 0.5})`;
@@ -288,3 +300,53 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
+
+// ---- Derelict drawing: world-locked paper inside a clipped circle ----
+function drawDerelict(ctx, state, cx, cy) {
+  const r = state.player.r;
+
+  // 1) Base hull color (silhouette)
+  // If you don’t want orange under the paper, change this to "#ffffff" or a neutral
+  ctx.fillStyle = "#9a3b31";
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 2) Paper texture INSIDE the derelict only (clip -> fill pattern)
+  const paper = state.textures?.paper;
+  if (paper?.ready && paper.img) {
+    ctx.save();
+    // Clip to the derelict circle so the pattern is only inside the ship
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.clip();
+
+    // World-locked offset so the texture is fixed in world space
+   // Pattern locked to world by transforming the pattern (no canvas translate)
+  let pat = ctx.createPattern(paper.img, "repeat");
+  if (pat && typeof pat.setTransform === "function") {
+    const scale = paper.scale || 1.6;
+    pat.setTransform(
+      new DOMMatrix()
+        .translate(-state.camera.x, -state.camera.y)
+        .scale(scale)
+    );
+  }
+  ctx.globalAlpha = 0.7;
+  ctx.fillStyle = pat || ctx.createPattern(paper.img, "repeat");
+
+  // Fill just the clipped area; a viewport-sized rect is fine
+  ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+
+    ctx.restore();
+  }
+
+  // 3) Outline so the ship reads
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.stroke();
+}
+

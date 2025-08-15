@@ -33,9 +33,8 @@ export function initMiasma(state, opts = {}) {
     laserFanCount:          opts.laserFanCount          ?? 3,
     laserFanMinDeg:         opts.laserFanMinDeg         ?? 0.25,
 
-    // NEW: damage per second when the player is in fog
+    // player damage per second while in fog
     dps: opts.dps ?? 35
-
   };
 }
 
@@ -53,7 +52,7 @@ export function drawMiasma(ctx, state, cx, cy, w, h) {
   const s = state.miasma; if (!s) return;
   const t = s.tile;
 
-  // visible world bounds
+  // visible world bounds (in world space)
   const leftW   = state.camera.x - w / 2;
   const rightW  = state.camera.x + w / 2;
   const topW    = state.camera.y - h / 2;
@@ -65,25 +64,59 @@ export function drawMiasma(ctx, state, cx, cy, w, h) {
   const minGY = Math.max(-s.halfRows, Math.floor(topW   / t) - 1);
   const maxGY = Math.min( s.halfRows, Math.ceil (bottomW/ t) + 1);
 
-  ctx.save();
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.fillStyle = 'rgba(120, 60, 160, 0.50)';
-  ctx.beginPath();
-
-  // compute first screen row start, then increment by tile size
+  // --- Build the fog path once ---
+  const fogPath = new Path2D();
   let sy = Math.floor(minGY * t - state.camera.y + cy);
   for (let gy = minGY; gy < maxGY; gy++, sy += t) {
     let sx = Math.floor(minGX * t - state.camera.x + cx);
     for (let gx = minGX; gx < maxGX; gx++, sx += t) {
       if (s.strength[idx(s, gx, gy)] === 1) {
-        ctx.rect(sx, sy, t, t);
+        fogPath.rect(sx, sy, t, t);
       }
     }
   }
 
-  ctx.fill();
+  // --- Paint base fog color ---
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+ctx.fillStyle = 'rgba(100, 40, 150, 0.42)';
+  ctx.fill(fogPath);
+
+  // --- Paper texture ONLY inside fog (clip to fogPath) ---
+  const paper = state.textures?.paper;
+  if (paper?.ready && paper.img) {
+    ctx.save();
+    ctx.clip(fogPath); // restrict to fog pixels
+
+    // Build repeating pattern and lock it to world space
+  // Build repeating pattern and lock it to world space
+let pat = ctx.createPattern(paper.img, 'repeat');
+if (pat && typeof pat.setTransform === 'function') {
+  const scale = paper.scale || 1.6;
+  pat.setTransform(
+    new DOMMatrix()
+      .translate(-state.camera.x, -state.camera.y)
+      .scale(scale)
+  );
+}
+
+// Multiply makes light paper NOT add haze; it only darkens creases
+ctx.globalCompositeOperation = 'multiply';
+ctx.globalAlpha = 0.35; // 0.30–0.45 looks good
+ctx.fillStyle = pat || ctx.createPattern(paper.img, 'repeat');
+ctx.fillRect(0, 0, w, h);
+
+// restore blend for the rest of the frame
+ctx.globalAlpha = 1.0;
+ctx.globalCompositeOperation = 'source-over';
+
+
+    ctx.restore(); // end clip
+  }
+
   ctx.restore();
 }
+
 
 export function clearWithBeam(state, cx, cy) {
   const s = state.miasma; const b = state.beam;
