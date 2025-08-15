@@ -148,7 +148,7 @@ export function updateEnemies(state, dt) {
           spawnPickup(state, m.x + Math.random() * 10 - 5, m.y + Math.random() * 10 - 5, "scrap");
         }
       } else if (m.type === "tank") {
-        for (let k = 0; k < 2; k++) {
+        for (let k = 0; k < 5; k++) {
           spawnPickup(state, m.x + Math.random() * 10 - 5, m.y + Math.random() * 10 - 5, "scrap");
         }
       } else {
