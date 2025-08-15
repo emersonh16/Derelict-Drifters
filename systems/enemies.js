@@ -1,4 +1,3 @@
-// systems/enemies.js
 import { spawnPickup } from "./pickups.js";
 import { collideWithObstacles } from "./world.js";
 
@@ -24,8 +23,16 @@ export function initEnemies(state, opts = {}) {
     safeDistInitial: opts.safeDistInitial ?? 250,
     safeDistTrickle: opts.safeDistTrickle ?? 200,
 
+    tankBulletSpeed: opts.tankBulletSpeed ?? 160,
+    tankBulletCooldown: opts.tankBulletCooldown ?? 2.5,
+    tankBulletDamage: opts.tankBulletDamage ?? 20,
+    tankBulletWidth: opts.tankBulletWidth ?? 18, // larger
+    tankBulletHeight: opts.tankBulletHeight ?? 6, // thicker
+
     spawnTimer: 0
   };
+
+  state.enemyProjectiles = [];
 }
 
 function spawnEnemies(state, count = 1, minDistFromPlayer = 150) {
@@ -51,7 +58,30 @@ function spawnEnemies(state, count = 1, minDistFromPlayer = 150) {
 
       if (Math.hypot(px - x, py - y) < minDistFromPlayer) continue;
 
-      out.push({ x, y, r: cfg.size, hp: cfg.baseHP, flash: 0 });
+      let roll = Math.random();
+      let type = "normal";
+      if (roll < 0.2) type = "fast";
+      else if (roll < 0.4) type = "tank";
+
+      let hp = cfg.baseHP;
+      let radius = cfg.size;
+      let cooldown = 0;
+      if (type === "fast") {
+        hp = cfg.baseHP * 0.5;
+      } else if (type === "tank") {
+        hp = cfg.baseHP * 2.5;
+        radius = state.player.r;
+        cooldown = 0;
+      }
+
+      out.push({
+        x, y,
+        r: radius,
+        hp,
+        flash: 0,
+        type,
+        shootCooldown: cooldown
+      });
       placed = true;
     }
   }
@@ -67,7 +97,6 @@ export function updateEnemies(state, dt) {
   const px = state.camera.x, py = state.camera.y;
   const playerR = state.player?.r ?? 18;
 
-  // trickle spawns
   cfg.spawnTimer += dt;
   if (list.length < cfg.max && cfg.spawnTimer >= cfg.spawnEvery) {
     cfg.spawnTimer = 0;
@@ -79,36 +108,61 @@ export function updateEnemies(state, dt) {
     let dx = px - m.x, dy = py - m.y;
     const dist = Math.hypot(dx, dy) || 1;
 
-    // chase
     if (dist <= cfg.detectRadius) {
-      dx /= dist; dy /= dist;
-      m.x += dx * cfg.speed * dt;
-      m.y += dy * cfg.speed * dt;
+      dx /= dist;
+      dy /= dist;
 
-      // Prevent enemy from passing through obstacles
+      if (m.type === "fast") {
+        m.x -= dx * cfg.speed * 1.5 * dt;
+        m.y -= dy * cfg.speed * 1.5 * dt;
+      } else if (m.type === "tank") {
+        m.x += dx * (cfg.speed * 0.5) * dt;
+        m.y += dy * (cfg.speed * 0.5) * dt;
+
+        m.shootCooldown -= dt;
+        if (m.shootCooldown <= 0) {
+          spawnTankBullet(state, m.x, m.y, dx, dy);
+          m.shootCooldown = cfg.tankBulletCooldown;
+        }
+      } else {
+        m.x += dx * cfg.speed * dt;
+        m.y += dy * cfg.speed * dt;
+      }
+
       collideWithObstacles(state, m, m.r);
+      m.x = Math.max(state.world.minX + m.r, Math.min(state.world.maxX - m.r, m.x));
+      m.y = Math.max(state.world.minY + m.r, Math.min(state.world.maxY - m.r, m.y));
     }
 
-    // contact damage
-    if (dist <= m.r + playerR) {
+    if (m.type !== "fast" && dist <= m.r + playerR) {
       state.health -= cfg.contactDPS * dt;
       state.damageFlash = 0.2;
     }
 
-    // laser damage
     applyLaserDamage(state, m, dt);
     m.flash = Math.max(0, m.flash - dt);
 
-    // death + drop
     if (m.hp <= 0) {
-      if (Math.random() < 0.1) {
-        spawnPickup(state, m.x, m.y, "health");
+      if (m.type === "fast") {
+        for (let k = 0; k < 5; k++) {
+          spawnPickup(state, m.x + Math.random() * 10 - 5, m.y + Math.random() * 10 - 5, "scrap");
+        }
+      } else if (m.type === "tank") {
+        for (let k = 0; k < 2; k++) {
+          spawnPickup(state, m.x + Math.random() * 10 - 5, m.y + Math.random() * 10 - 5, "scrap");
+        }
       } else {
-        spawnPickup(state, m.x, m.y, "scrap");
+        if (Math.random() < 0.1) {
+          spawnPickup(state, m.x, m.y, "health");
+        } else {
+          spawnPickup(state, m.x, m.y, "scrap");
+        }
       }
       list.splice(i, 1);
     }
   }
+
+  updateEnemyProjectiles(state, dt);
 }
 
 export function drawEnemies(ctx, state, cx, cy) {
@@ -120,17 +174,91 @@ export function drawEnemies(ctx, state, cx, cy) {
     const sy = m.y - py + cy;
     ctx.beginPath();
     ctx.arc(sx, sy, m.r, 0, Math.PI * 2);
-    ctx.fillStyle = m.flash > 0
-      ? `rgba(255,255,255,${m.flash / cfg.flashTime})`
-      : 'rgba(200,50,50,0.9)';
+
+    if (m.type === "fast") {
+      ctx.fillStyle = m.flash > 0 ? `rgba(255,255,255,${m.flash / cfg.flashTime})` : 'rgba(50,50,200,0.9)';
+    } else if (m.type === "tank") {
+      ctx.fillStyle = m.flash > 0 ? `rgba(255,255,255,${m.flash / cfg.flashTime})` : 'rgba(255,165,0,0.9)';
+    } else {
+      ctx.fillStyle = m.flash > 0 ? `rgba(255,255,255,${m.flash / cfg.flashTime})` : 'rgba(200,50,50,0.9)';
+    }
+
     ctx.fill();
     ctx.strokeStyle = 'white';
     ctx.lineWidth = 2;
     ctx.stroke();
   }
+
+  drawEnemyProjectiles(ctx, state, cx, cy);
 }
 
-// ---- internals ----
+function spawnTankBullet(state, x, y, dx, dy) {
+  const cfg = state.enemies;
+  const len = Math.hypot(dx, dy) || 1;
+  dx /= len;
+  dy /= len;
+
+  state.enemyProjectiles.push({
+    x,
+    y,
+    dx,
+    dy,
+    w: cfg.tankBulletWidth,
+    h: cfg.tankBulletHeight,
+    speed: cfg.tankBulletSpeed
+  });
+}
+
+function updateEnemyProjectiles(state, dt) {
+  const cfg = state.enemies;
+  const px = state.camera.x;
+  const py = state.camera.y;
+  const pr = state.player.r;
+
+  for (let i = state.enemyProjectiles.length - 1; i >= 0; i--) {
+    const p = state.enemyProjectiles[i];
+    p.x += p.dx * p.speed * dt;
+    p.y += p.dy * p.speed * dt;
+
+    const dist = Math.hypot(p.x - px, p.y - py);
+    if (dist < pr) {
+      state.health -= cfg.tankBulletDamage;
+      state.damageFlash = 0.2;
+      state.enemyProjectiles.splice(i, 1);
+      continue;
+    }
+
+    if (
+      p.x < state.world.minX || p.x > state.world.maxX ||
+      p.y < state.world.minY || p.y > state.world.maxY
+    ) {
+      state.enemyProjectiles.splice(i, 1);
+    }
+  }
+}
+
+function drawEnemyProjectiles(ctx, state, cx, cy) {
+  const px = state.camera.x;
+  const py = state.camera.y;
+
+  for (const p of state.enemyProjectiles) {
+    const sx = p.x - px + cx;
+    const sy = p.y - py + cy;
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(Math.atan2(p.dy, p.dx));
+
+    ctx.fillStyle = 'rgba(255,0,0,0.9)';
+    ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+
+    ctx.strokeStyle = 'white';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(-p.w / 2, -p.h / 2, p.w, p.h);
+
+    ctx.restore();
+  }
+}
+
 function applyLaserDamage(state, m, dt) {
   const b = state.beam;
   if (!b) return;
