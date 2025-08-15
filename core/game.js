@@ -8,7 +8,9 @@ import {
 import { initEnemies, spawnInitialEnemies, updateEnemies, drawEnemies } from "../systems/enemies.js";
 import { initHUD, updateHUD } from "../ui/hud.js";
 import { updatePickups, drawPickups } from "../systems/pickups.js";
-import { initWorld, clampToWorld, drawWorldBorder, drawObstacles, collideWithObstacles } from "../systems/world.js";
+import { initWorld, clampToWorld, drawWorldBorder, drawObstacles, collideWithObstacles, carveObstaclesWithDrill } from "../systems/world.js";
+import { initDrill, drawDrill } from "../systems/drill.js";
+
 
 
 const canvas = document.getElementById("game");
@@ -31,7 +33,8 @@ const state = {
   win: false,
   maxScrap: config.game.winScrap,
   laserEnergy: config.game.maxLaserEnergy,   // starts full
-  maxLaserEnergy: config.game.maxLaserEnergy
+  maxLaserEnergy: config.game.maxLaserEnergy,
+  activeWeapon: "beam",   // "beam" | "drill"
 };
 
 // ---- Resize ----
@@ -73,6 +76,13 @@ window.addEventListener("keydown", (e) => {
     startGame();
   }
 });
+
+window.addEventListener("keydown", (e) => {
+  if (e.repeat) return;
+  if (e.key === "1") state.activeWeapon = "beam";
+  if (e.key === "2") state.activeWeapon = "drill";
+});
+
 
 
 function togglePause() {
@@ -131,6 +141,8 @@ function startGame() {
 
 // ---- Init ----
 startGame();
+initDrill(state);
+
 
 
 // ---- Update ----
@@ -158,9 +170,44 @@ function update(dt) {
 
   clampToWorld(state);
 
+// --- Drill carving (always on when drill is selected) ---
+if (state.activeWeapon === "drill" && state.drill) {
+  // We aim in SCREEN space (player is at center cx,cy), then convert to WORLD for carving
+  const cx = canvas.width * 0.5;
+  const cy = canvas.height * 0.5;
+
+  const ang = Math.atan2(state.mouse.y - cy, state.mouse.x - cx);
+
+  const r = state.player.r;
+  const length = state.drill.length;
+  const width  = state.drill.width;
+  const halfW  = width * 0.5;
+
+  // Keep base fully inside player circle (same logic as draw)
+  const safeOffset = Math.max(state.drill.offset ?? 0, r - halfW - 1);
+
+  const px = state.camera.x, py = state.camera.y; // player world pos
+
+  const baseX = px + Math.cos(ang) * safeOffset;
+  const baseY = py + Math.sin(ang) * safeOffset;
+  const tipX  = px + Math.cos(ang) * (safeOffset + length);
+  const tipY  = py + Math.sin(ang) * (safeOffset + length);
+
+  carveObstaclesWithDrill(
+    state,
+    { x: baseX, y: baseY },
+    { x: tipX,  y: tipY  },
+    halfW
+  );
+}
+
+
+
   updateMiasma(state, dt);
   updateEnemies(state, dt);
   updatePickups(state, dt);
+
+
 
 
   // Win condition
@@ -222,18 +269,25 @@ function draw() {
   ctx.fillStyle = "#0c0b10";
   ctx.fillRect(0, 0, w, h);
 
+if (state.activeWeapon === "beam") {
   getBeamGeom(state, cx, cy);
-
   if (!state.paused && !state.gameOver) {
     clearWithBeam(state, cx, cy);
   }
+}
+
 
 drawObstacles(ctx, state, cx, cy); // draw terrain first
 drawEnemies(ctx, state, cx, cy);
 drawPickups(ctx, state, cx, cy);
 drawMiasma(ctx, state, cx, cy, w, h);
 drawWorldBorder(ctx, state, cx, cy);
-drawBeam(ctx, state, cx, cy);
+if (state.activeWeapon === "beam") {
+  drawBeam(ctx, state, cx, cy);
+} else if (state.activeWeapon === "drill") {
+  drawDrill(ctx, state, cx, cy);
+}
+
 
   ctx.fillStyle = "#9a3b31";
   ctx.beginPath();
