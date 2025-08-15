@@ -271,9 +271,12 @@ function applyLaserDamage(state, m, dt) {
   const tx = ox + Math.cos(b.angle) * b.range;
   const ty = oy + Math.sin(b.angle) * b.range;
 
-  const thickness = 20;
-  const d2 = distPointToSegmentSq(m.x, m.y, ox, oy, tx, ty);
-  if (d2 <= (thickness * 0.5) ** 2) {
+const thickness = 20; // visual beam width in px
+const d2 = distPointToSegmentSq(m.x, m.y, ox, oy, tx, ty);
+// enemy circle (radius m.r) vs thick beam (radius thickness/2)
+const combined = m.r + thickness * 0.5;
+if (d2 <= combined * combined) {
+
     m.hp -= state.enemies.laserDPS * dt;
     m.flash = state.enemies.flashTime;
   }
