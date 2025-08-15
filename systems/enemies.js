@@ -56,8 +56,19 @@ function spawnEnemies(state, count = 1, minDistFromPlayer = 150) {
       const x = gx * t + t * 0.5;
       const y = gy * t + t * 0.5;
 
+      // Skip too close to player
       if (Math.hypot(px - x, py - y) < minDistFromPlayer) continue;
 
+      // Convert grid coords to obstacleGrid index
+      const col = gx + s.halfCols;
+      const row = gy + s.halfRows;
+      const idx = row * s.cols + col;
+
+      // Skip if out of bounds or inside a rock
+      if (col < 0 || col >= s.cols || row < 0 || row >= s.rows) continue;
+      if (state.obstacleGrid && state.obstacleGrid[idx] === 1) continue;
+
+      // Type & stats
       let roll = Math.random();
       let type = "normal";
       if (roll < 0.2) type = "fast";
@@ -86,6 +97,7 @@ function spawnEnemies(state, count = 1, minDistFromPlayer = 150) {
     }
   }
 }
+
 
 export function spawnInitialEnemies(state, count = 40) {
   spawnEnemies(state, count, state.enemies.safeDistInitial);

@@ -1,3 +1,5 @@
+// systems/drill.js
+
 export function initDrill(state, opts = {}) {
   const r = state.player?.r ?? 18;
   state.drill = {
@@ -67,10 +69,14 @@ export function drawDrill(ctx, state, cx, cy) {
   ctx.restore();
 }
 
-
 export function getDrillTriangleWorld(state) {
   const { length, width, offset, playerRadius } = state.drill;
-  const halfW = width * 0.5;
+
+  // Hitbox tuning
+  const hitboxLengthMult = 1.15; // 1.0 = exact visual length, >1 = longer reach
+  const hitboxWidthMult  = 1.35; // 1.0 = exact visual width, >1 = wider hit area
+
+  const halfW = (width * hitboxWidthMult) * 0.5;
 
   // Player world position
   const px = state.camera.x, py = state.camera.y;
@@ -85,8 +91,8 @@ export function getDrillTriangleWorld(state) {
 
   const baseX = px + Math.cos(ang) * safeOffset;
   const baseY = py + Math.sin(ang) * safeOffset;
-  const tipX  = px + Math.cos(ang) * (safeOffset + length);
-  const tipY  = py + Math.sin(ang) * (safeOffset + length);
+  const tipX  = px + Math.cos(ang) * (safeOffset + length * hitboxLengthMult);
+  const tipY  = py + Math.sin(ang) * (safeOffset + length * hitboxLengthMult);
 
   const nx = -Math.sin(ang), ny = Math.cos(ang);
   const a = { x: baseX + nx * halfW, y: baseY + ny * halfW };
@@ -104,3 +110,41 @@ export function getDrillTriangleWorld(state) {
   };
 }
 
+export function carveObstaclesWithDrillTri(state, tri, dt, pad = 2) {
+  const t = state.miasma.tile;
+  const cols = state.miasma.cols;
+  const rows = state.miasma.rows;
+  const grid = state.obstacleGrid;
+  if (!grid) return;
+
+  const minCol = Math.floor((tri.aabb.minX - pad + state.miasma.halfCols * t) / t);
+  const maxCol = Math.floor((tri.aabb.maxX + pad + state.miasma.halfCols * t) / t);
+  const minRow = Math.floor((tri.aabb.minY - pad + state.miasma.halfRows * t) / t);
+  const maxRow = Math.floor((tri.aabb.maxY + pad + state.miasma.halfRows * t) / t);
+
+  for (let row = minRow; row <= maxRow; row++) {
+    for (let col = minCol; col <= maxCol; col++) {
+      if (col < 0 || col >= cols || row < 0 || row >= rows) continue;
+
+      // Tile center point in world coords
+      const cx = col * t - state.miasma.halfCols * t + t / 2;
+      const cy = row * t - state.miasma.halfRows * t + t / 2;
+
+      // Check if tile center is inside the triangle
+      if (pointInTriangle({ x: cx, y: cy }, tri.a, tri.b, tri.c)) {
+        if (grid[row * cols + col] === 1) {
+          grid[row * cols + col] = 0;
+        }
+      }
+    }
+  }
+}
+
+// Helper: point-in-triangle test
+function pointInTriangle(p, a, b, c) {
+  const areaOrig = Math.abs((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y));
+  const area1 = Math.abs((a.x - p.x) * (b.y - p.y) - (b.x - p.x) * (a.y - p.y));
+  const area2 = Math.abs((b.x - p.x) * (c.y - p.y) - (c.x - p.x) * (b.y - p.y));
+  const area3 = Math.abs((c.x - p.x) * (a.y - p.y) - (a.x - p.x) * (c.y - p.y));
+  return Math.abs(area1 + area2 + area3 - areaOrig) < 0.01;
+}
