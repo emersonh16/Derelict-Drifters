@@ -1,39 +1,37 @@
 // systems/world.js
+/** @typedef {import('../core/state.js').MiasmaState} MiasmaState */
+/** @typedef {import('../core/state.js').WorldState} WorldState */
 
-export function initWorld(state, opts = {}) {
-  const s = state.miasma;
-  const t = s.tile;
+export function initWorld(miasma, player, opts = {}) {
+  const t = miasma.tile;
 
-  // World bounds from miasma size
-  state.world = {
-    minX: -s.halfCols * t,
-    maxX:  s.halfCols * t,
-    minY: -s.halfRows * t,
-    maxY:  s.halfRows * t,
+  /** @type {WorldState} */
+  const world = {
+    minX: -miasma.halfCols * t,
+    maxX:  miasma.halfCols * t,
+    minY: -miasma.halfRows * t,
+    maxY:  miasma.halfRows * t,
     borderThickness: opts.borderThickness ?? 80,
     borderColor: opts.borderColor ?? 'rgba(120, 60, 160, 0.7)'
   };
 
-  // New obstacle grid
-  state.obstacleGrid = new Uint8Array(s.size).fill(0);
+  const obstacleGrid = new Uint8Array(miasma.size).fill(0);
 
   // Generate irregular rock formations
-  generateObstacles(state, opts.seedCount ?? 30, opts.growthSteps ?? 700, opts.spawnSafeTiles);
+  generateObstacles(miasma, obstacleGrid, opts.seedCount ?? 30, opts.growthSteps ?? 700, opts.spawnSafeTiles);
 
   // Ensure the spawn area is absolutely clear (in tiles)
-  const playerR = state.player?.r ?? 18;
+  const playerR = player?.r ?? 18;
   const tilesRadius = opts?.spawnSafeTiles ?? Math.max(6, Math.ceil(playerR / t) + 3);
-  clearSpawnArea(state, tilesRadius);
+  clearSpawnArea(miasma, obstacleGrid, tilesRadius);
 
-  // Keep for compatibility (empty)
-  state.obstacles = [];
+  return { world, obstacleGrid };
 }
 
 // Random-walk growth algorithm for wonky rock shapes
-function generateObstacles(state, seedCount = 20, growthSteps = 150, spawnSafeOverride) {
-  const cols = state.miasma.cols;
-  const rows = state.miasma.rows;
-  const grid = state.obstacleGrid;
+function generateObstacles(miasma, grid, seedCount = 20, growthSteps = 150, spawnSafeOverride) {
+  const cols = miasma.cols;
+  const rows = miasma.rows;
 
   const centerCol = Math.floor(cols / 2);
   const centerRow = Math.floor(rows / 2);
@@ -102,56 +100,56 @@ function generateBranch(grid, col, row, cols, rows, steps, centerCol, centerRow,
   }
 }
 
-export function clampToWorld(state) {
-  const w = state.world; if (!w) return;
-  const r = state.player?.r ?? 18;
-  state.camera.x = clamp(state.camera.x, w.minX + r, w.maxX - r);
-  state.camera.y = clamp(state.camera.y, w.minY + r, w.maxY - r);
+export function clampToWorld(world, camera, player) {
+  if (!world) return;
+  const r = player?.r ?? 18;
+  camera.x = clamp(camera.x, world.minX + r, world.maxX - r);
+  camera.y = clamp(camera.y, world.minY + r, world.maxY - r);
 }
 
-export function drawWorldBorder(ctx, state, cx, cy) {
-  const w = state.world; if (!w) return;
-  const thickness = w.borderThickness;
-  const color = w.borderColor;
+export function drawWorldBorder(ctx, world, camera, cx, cy) {
+  if (!world) return;
+  const thickness = world.borderThickness;
+  const color = world.borderColor;
 
   ctx.save();
   ctx.fillStyle = color;
 
   ctx.fillRect(
-    w.minX - state.camera.x + cx - thickness,
-    w.minY - thickness - state.camera.y + cy,
-    (w.maxX - w.minX) + thickness * 2,
+    world.minX - camera.x + cx - thickness,
+    world.minY - thickness - camera.y + cy,
+    (world.maxX - world.minX) + thickness * 2,
     thickness
   );
   ctx.fillRect(
-    w.minX - state.camera.x + cx - thickness,
-    w.maxY - state.camera.y + cy,
-    (w.maxX - w.minX) + thickness * 2,
+    world.minX - camera.x + cx - thickness,
+    world.maxY - camera.y + cy,
+    (world.maxX - world.minX) + thickness * 2,
     thickness
   );
   ctx.fillRect(
-    w.minX - thickness - state.camera.x + cx,
-    w.minY - state.camera.y + cy,
+    world.minX - thickness - camera.x + cx,
+    world.minY - camera.y + cy,
     thickness,
-    (w.maxY - w.minY)
+    (world.maxY - world.minY)
   );
   ctx.fillRect(
-    w.maxX - state.camera.x + cx,
-    w.minY - state.camera.y + cy,
+    world.maxX - camera.x + cx,
+    world.minY - camera.y + cy,
     thickness,
-    (w.maxY - w.minY)
+    (world.maxY - world.minY)
   );
 
   ctx.restore();
 }
 
 // Draw rock tiles
-export function drawObstacles(ctx, state, cx, cy) {
-  const t = state.miasma.tile;
-  const cols = state.miasma.cols;
-  const rows = state.miasma.rows;
-  const px = state.camera.x;
-  const py = state.camera.y;
+export function drawObstacles(ctx, miasma, obstacleGrid, camera, cx, cy) {
+  const t = miasma.tile;
+  const cols = miasma.cols;
+  const rows = miasma.rows;
+  const px = camera.x;
+  const py = camera.y;
 
   ctx.save();
   ctx.fillStyle = "#444";
@@ -159,9 +157,9 @@ export function drawObstacles(ctx, state, cx, cy) {
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
       const idx = row * cols + col;
-      if (state.obstacleGrid[idx] === 1) {
-        const x = col * t - state.miasma.halfCols * t;
-        const y = row * t - state.miasma.halfRows * t;
+      if (obstacleGrid[idx] === 1) {
+        const x = col * t - miasma.halfCols * t;
+        const y = row * t - miasma.halfRows * t;
         ctx.fillRect(x - px + cx, y - py + cy, t, t);
       }
     }
@@ -171,25 +169,25 @@ export function drawObstacles(ctx, state, cx, cy) {
 }
 
 // Collision detection for grid-based rocks
-export function collideWithObstacles(state, entity, radius) {
-  const t = state.miasma.tile;
-  const cols = state.miasma.cols;
-  const rows = state.miasma.rows;
-  const grid = state.obstacleGrid;
+export function collideWithObstacles(miasma, obstacleGrid, entity, radius) {
+  const t = miasma.tile;
+  const cols = miasma.cols;
+  const rows = miasma.rows;
+  const grid = obstacleGrid;
 
   // Calculate bounding box in tile coordinates
-  const minX = Math.floor((entity.x - radius + state.miasma.halfCols * t) / t);
-  const maxX = Math.floor((entity.x + radius + state.miasma.halfCols * t) / t);
-  const minY = Math.floor((entity.y - radius + state.miasma.halfRows * t) / t);
-  const maxY = Math.floor((entity.y + radius + state.miasma.halfRows * t) / t);
+  const minX = Math.floor((entity.x - radius + miasma.halfCols * t) / t);
+  const maxX = Math.floor((entity.x + radius + miasma.halfCols * t) / t);
+  const minY = Math.floor((entity.y - radius + miasma.halfRows * t) / t);
+  const maxY = Math.floor((entity.y + radius + miasma.halfRows * t) / t);
 
   for (let ty = minY; ty <= maxY; ty++) {
     for (let tx = minX; tx <= maxX; tx++) {
       if (tx < 0 || tx >= cols || ty < 0 || ty >= rows) continue;
       const idx = ty * cols + tx;
       if (grid[idx] === 1) {
-        const tileCenterX = tx * t - state.miasma.halfCols * t + t / 2;
-        const tileCenterY = ty * t - state.miasma.halfRows * t + t / 2;
+        const tileCenterX = tx * t - miasma.halfCols * t + t / 2;
+        const tileCenterY = ty * t - miasma.halfRows * t + t / 2;
         const dx = entity.x - tileCenterX;
         const dy = entity.y - tileCenterY;
         const dist = Math.hypot(dx, dy) || 1;
@@ -205,24 +203,24 @@ export function collideWithObstacles(state, entity, radius) {
 }
 
   // Drill carving (triangle-accurate; no corridor thickening)
-export function carveObstaclesWithDrillTri(state, tri, dt, pad = 0) {
-  const t = state.miasma.tile;
-  const cols = state.miasma.cols;
-  const rows = state.miasma.rows;
-  const grid = state.obstacleGrid;
+export function carveObstaclesWithDrillTri(miasma, obstacleGrid, tri, dt, pad = 0) {
+  const t = miasma.tile;
+  const cols = miasma.cols;
+  const rows = miasma.rows;
+  const grid = obstacleGrid;
   if (!grid) return;
 
   // AABB for quick bounds (pad=0 keeps it tight)
-  const minCol = Math.max(0, Math.floor((tri.aabb.minX - pad + state.miasma.halfCols * t) / t));
-  const maxCol = Math.min(cols - 1, Math.floor((tri.aabb.maxX + pad + state.miasma.halfCols * t) / t));
-  const minRow = Math.max(0, Math.floor((tri.aabb.minY - pad + state.miasma.halfRows * t) / t));
-  const maxRow = Math.min(rows - 1, Math.floor((tri.aabb.maxY + pad + state.miasma.halfRows * t) / t));
+  const minCol = Math.max(0, Math.floor((tri.aabb.minX - pad + miasma.halfCols * t) / t));
+  const maxCol = Math.min(cols - 1, Math.floor((tri.aabb.maxX + pad + miasma.halfCols * t) / t));
+  const minRow = Math.max(0, Math.floor((tri.aabb.minY - pad + miasma.halfRows * t) / t));
+  const maxRow = Math.min(rows - 1, Math.floor((tri.aabb.maxY + pad + miasma.halfRows * t) / t));
 
   for (let row = minRow; row <= maxRow; row++) {
     for (let col = minCol; col <= maxCol; col++) {
       // Tile center in world space
-      const cx = col * t - state.miasma.halfCols * t + t * 0.5;
-      const cy = row * t - state.miasma.halfRows * t + t * 0.5;
+      const cx = col * t - miasma.halfCols * t + t * 0.5;
+      const cy = row * t - miasma.halfRows * t + t * 0.5;
 
       // Only clear if the tile center is inside the drill triangle
       if (pointInTriangle(cx, cy, tri.a, tri.b, tri.c)) {
@@ -254,9 +252,8 @@ export function pointInTriangle(px, py, a, b, c) {
 }
 
 // Clear a circular spawn area at the world center (radius in tiles)
-function clearSpawnArea(state, tilesRadius = 8) {
-  const { cols, rows } = state.miasma;
-  const grid = state.obstacleGrid;
+function clearSpawnArea(miasma, grid, tilesRadius = 8) {
+  const { cols, rows } = miasma;
   const cx = Math.floor(cols / 2);
   const cy = Math.floor(rows / 2);
 

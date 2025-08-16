@@ -1,7 +1,9 @@
 // ui/devhud.js
 // Ultra-light Dev HUD: FPS + dt only, drawn at top-right.
 // Toggle with "P" (hooked up in core/game.js).
+/** @typedef {import('../core/state.js').GameState} GameState */
 
+/** @param {GameState} state */
 export function initDevHUD(state) {
   state.dev = state.dev || {};
   state.dev.show = state.dev.show ?? false; // starts hidden
@@ -14,11 +16,13 @@ export function initDevHUD(state) {
   };
 }
 
+/** @param {GameState} state */
 export function toggleDevHUD(state) {
   state.dev = state.dev || {};
   state.dev.show = !state.dev.show;
 }
 
+/** @param {GameState} state */
 export function updateDevHUD(state, dt) {
   const p = state.dev?.perf;
   if (!p) return;
@@ -34,6 +38,7 @@ export function updateDevHUD(state, dt) {
   }
 }
 
+/** @param {GameState} state */
 export function drawDevHUD(ctx, state) {
   const dev = state?.dev;
   if (!dev?.show) return;

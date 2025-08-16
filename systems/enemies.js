@@ -2,16 +2,17 @@
 import { spawnPickup } from "./pickups.js";
 import { collideWithObstacles, pointInTriangle } from "./world.js";
 import { getDrillTriangleWorld } from "./drill.js";
+/** @typedef {import('../core/state.js').GameState} GameState */
 
-export function initEnemies(state, opts = {}) {
-  const cols = state.miasma.cols ?? (state.miasma.halfCols * 2);
-  const rows = state.miasma.rows ?? (state.miasma.halfRows * 2);
+export function initEnemies(miasma, opts = {}) {
+  const cols = miasma.cols ?? (miasma.halfCols * 2);
+  const rows = miasma.rows ?? (miasma.halfRows * 2);
 
-  state.enemies = {
+  return {
     list: [],
     max: opts.max ?? 40,
-    worldW: cols * state.miasma.tile,
-    worldH: rows * state.miasma.tile,
+    worldW: cols * miasma.tile,
+    worldH: rows * miasma.tile,
 
     speed: opts.speed ?? 70,
     detectRadius: opts.detectRadius ?? 400,
@@ -33,8 +34,6 @@ export function initEnemies(state, opts = {}) {
 
     spawnTimer: 0
   };
-
-  state.enemyProjectiles = [];
 }
 
 function spawnEnemies(state, count = 1, minDistFromPlayer = 150) {
@@ -100,10 +99,12 @@ function spawnEnemies(state, count = 1, minDistFromPlayer = 150) {
   }
 }
 
+/** @param {GameState} state */
 export function spawnInitialEnemies(state, count = 40) {
   spawnEnemies(state, count, state.enemies.safeDistInitial);
 }
 
+/** @param {GameState} state */
 export function updateEnemies(state, dt) {
   const cfg = state.enemies;
   const list = cfg.list;
@@ -112,7 +113,7 @@ export function updateEnemies(state, dt) {
 
   // Compute the drill triangle once per frame (only if drill is selected)
   const tri = (state.activeWeapon === "drill" && state.drill)
-    ? getDrillTriangleWorld(state)
+    ? getDrillTriangleWorld(state.drill, state.camera, state.mouse)
     : null;
 
   cfg.spawnTimer += dt;
@@ -147,7 +148,7 @@ export function updateEnemies(state, dt) {
         m.y += dy * cfg.speed * dt;
       }
 
-      collideWithObstacles(state, m, m.r);
+      collideWithObstacles(state.miasma, state.obstacleGrid, m, m.r);
       m.x = Math.max(state.world.minX + m.r, Math.min(state.world.maxX - m.r, m.x));
       m.y = Math.max(state.world.minY + m.r, Math.min(state.world.maxY - m.r, m.y));
     }
@@ -184,17 +185,17 @@ export function updateEnemies(state, dt) {
     if (m.hp <= 0) {
       if (m.type === "fast") {
         for (let k = 0; k < 5; k++) {
-          spawnPickup(state, m.x + Math.random() * 10 - 5, m.y + Math.random() * 10 - 5, "scrap");
+          spawnPickup(state.pickups, m.x + Math.random() * 10 - 5, m.y + Math.random() * 10 - 5, "scrap");
         }
       } else if (m.type === "tank") {
         for (let k = 0; k < 5; k++) {
-          spawnPickup(state, m.x + Math.random() * 10 - 5, m.y + Math.random() * 10 - 5, "scrap");
+          spawnPickup(state.pickups, m.x + Math.random() * 10 - 5, m.y + Math.random() * 10 - 5, "scrap");
         }
       } else {
         if (Math.random() < 0.1) {
-          spawnPickup(state, m.x, m.y, "health");
+          spawnPickup(state.pickups, m.x, m.y, "health");
         } else {
-          spawnPickup(state, m.x, m.y, "scrap");
+          spawnPickup(state.pickups, m.x, m.y, "scrap");
         }
       }
       list.splice(i, 1);
@@ -204,6 +205,7 @@ export function updateEnemies(state, dt) {
   updateEnemyProjectiles(state, dt);
 }
 
+/** @param {GameState} state */
 export function drawEnemies(ctx, state, cx, cy) {
   const cfg = state.enemies;
   const px = state.camera.x, py = state.camera.y;

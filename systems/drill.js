@@ -1,8 +1,10 @@
 // systems/drill.js
+/** @typedef {import('../core/state.js').DrillState} DrillState */
 
-export function initDrill(state, opts = {}) {
-  const r = state.player?.r ?? 18;
-  state.drill = {
+export function initDrill(player, opts = {}) {
+  const r = player?.r ?? 18;
+  /** @type {DrillState} */
+  const drill = {
     length: opts.length ?? 55,                       // short & stout
     width:  opts.width  ?? Math.min(40, r * 1.8),    // chunky base
     offset: opts.offset ?? 0,
@@ -16,15 +18,16 @@ export function initDrill(state, opts = {}) {
     capStroke: opts.capStroke ?? "#374151",          // base cap outline
     playerRadius: r
   };
+  return drill;
 }
 
-export function drawDrill(ctx, state, cx, cy) {
-  if (!state.drill || state.activeWeapon !== "drill") return;
+export function drawDrill(ctx, drill, mouse, activeWeapon, cx, cy) {
+  if (!drill || activeWeapon !== "drill") return;
 
-  const { length, width, offset, fill, stroke, capFill, capStroke, playerRadius } = state.drill;
+  const { length, width, offset, fill, stroke, capFill, capStroke, playerRadius } = drill;
 
   // Aim in SCREEN space
-  const ang = Math.atan2(state.mouse.y - cy, state.mouse.x - cx);
+  const ang = Math.atan2(mouse.y - cy, mouse.x - cx);
 
   // Keep base inside derelict circle
   const safeOffset = Math.max(offset, playerRadius - (width / 2) - 1);
@@ -77,8 +80,8 @@ export function drawDrill(ctx, state, cx, cy) {
  * Returns the drill triangle in WORLD coordinates + its AABB.
  * Used for obstacle carving and enemy damage checks.
  */
-export function getDrillTriangleWorld(state) {
-  const { length, width, offset, playerRadius } = state.drill;
+export function getDrillTriangleWorld(drill, camera, mouse) {
+  const { length, width, offset, playerRadius } = drill;
 
   // Hitbox tuning (visual helpers)
   const hitboxLengthMult = 1.15; // >1 = longer reach than visual
@@ -87,12 +90,12 @@ export function getDrillTriangleWorld(state) {
   const halfW = (width * hitboxWidthMult) * 0.5;
 
   // Player world position
-  const px = state.camera.x, py = state.camera.y;
+  const px = camera.x, py = camera.y;
 
   // Use window size for screen center (drill aims in screen space)
   const cx = (typeof window !== "undefined" ? window.innerWidth  * 0.5 : 0);
   const cy = (typeof window !== "undefined" ? window.innerHeight * 0.5 : 0);
-  const ang = Math.atan2(state.mouse.y - cy, state.mouse.x - cx);
+  const ang = Math.atan2(mouse.y - cy, mouse.x - cx);
 
   // Keep base inside circle
   const safeOffset = Math.max(offset, playerRadius - halfW - 1);

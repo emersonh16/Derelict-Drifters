@@ -2,6 +2,7 @@
 import { config } from "../core/config.js";
 import { beam, miasma, enemies, pickups, world, drill } from "../systems/index.js";
 import { hud, devhud } from "../ui/index.js";
+import { createGameState } from "./state.js";
 
 
 
@@ -9,26 +10,9 @@ import { hud, devhud } from "../ui/index.js";
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d", { alpha: false });
 
-const state = {
-  time: 0, dt: 0,
-  mouse: { x: 0, y: 0 },        // aim used for drawing/beam logic
-  pendingMouse: { x: 0, y: 0 }, // tracks mouse while paused
-  camera: { x: 0, y: 0 },
-  player: { r: 18 },
-  keys: new Set(),
-  health: 100,
-  maxHealth: 100,
-  gameOver: false,
-  scrap: 0,
-  pickups: [], // {x, y, type, r}
-  damageFlash: 0,
-  paused: false,
-  win: false,
-  maxScrap: config.game.winScrap,
-  laserEnergy: config.game.maxLaserEnergy,   // starts full
-  maxLaserEnergy: config.game.maxLaserEnergy,
-  activeWeapon: "beam",   // "beam" | "drill"
-};
+const state = createGameState();
+state.maxScrap = config.game.winScrap;
+state.laserEnergy = state.maxLaserEnergy = config.game.maxLaserEnergy;
 
 // ---- Resize ----
 function resize() {
@@ -59,7 +43,7 @@ canvas.addEventListener("mousemove", (e) => {
 
 canvas.addEventListener("wheel", (e) => {
   if (state.paused || state.gameOver) return;
-  beam.onWheelAdjust(state, e.deltaY);
+  beam.onWheelAdjust(state.beam, e.deltaY);
   e.preventDefault();
 }, { passive: false });
 
@@ -129,10 +113,13 @@ function startGame() {
   state.pendingMouse.y = state.mouse.y;
 
   // world + systems (same order as first load)
-  miasma.initMiasma(state, config.miasma);                 // brand-new fog grid
-  world.initWorld(state, config.world);                   // world depends on miasma size
-  beam.initBeam(state, config.beam);
-  enemies.initEnemies(state, config.enemies);
+  state.miasma = miasma.initMiasma(config.miasma);                 // brand-new fog grid
+  const wInit = world.initWorld(state.miasma, state.player, config.world); // world depends on miasma size
+  state.world = wInit.world;
+  state.obstacleGrid = wInit.obstacleGrid;
+  state.beam = beam.initBeam(config.beam);
+  state.enemies = enemies.initEnemies(state.miasma, config.enemies);
+  state.enemyProjectiles.length = 0;
   enemies.spawnInitialEnemies(state, config.enemies.max);
   hud.initHUD(state, config.hud);
 }
@@ -140,7 +127,7 @@ function startGame() {
 
 // ---- Init ----
 startGame();
-drill.initDrill(state);
+state.drill = drill.initDrill(state.player);
 devhud.initDevHUD(state);
 
 
@@ -164,24 +151,24 @@ function update(dt) {
     state.camera.y += vy * speed * dt;
 
     // Prevent player from passing through obstacles
-    world.collideWithObstacles(state, state.camera, state.player.r);
+    world.collideWithObstacles(state.miasma, state.obstacleGrid, state.camera, state.player.r);
   }
 
-  world.clampToWorld(state);
+  world.clampToWorld(state.world, state.camera, state.player);
 
 
 // --- Drill carving using triangle hitbox ---
 if (state.activeWeapon === "drill" && state.drill) {
-  const tri = drill.getDrillTriangleWorld(state);
-  world.carveObstaclesWithDrillTri(state, tri, dt, 2); // pad=2 for small buffer
+  const tri = drill.getDrillTriangleWorld(state.drill, state.camera, state.mouse);
+  world.carveObstaclesWithDrillTri(state.miasma, state.obstacleGrid, tri, dt, 2); // pad=2 for small buffer
 }
 
 
 
 
-  miasma.updateMiasma(state, dt);
+  miasma.updateMiasma(state.miasma, state.time, dt);
   enemies.updateEnemies(state, dt);
-  pickups.updatePickups(state, dt);
+  pickups.updatePickups(state.pickups, state.camera, state.player, state, dt);
 
 
 
@@ -224,7 +211,7 @@ if (state.activeWeapon === "drill" && state.drill) {
       state.laserEnergy = 0;
       // auto shut off laser if empty
       beamState.t = beamState.tConeEnd - 0.01; // forces it back to cone mode
-      beam.getBeamGeom(state, canvas.width / 2, canvas.height / 2);
+      beam.getBeamGeom(state.beam, state.mouse, canvas.width / 2, canvas.height / 2);
     }
   } else {
     state.laserEnergy = Math.min(
@@ -246,23 +233,23 @@ function draw() {
   ctx.fillRect(0, 0, w, h);
 
 if (state.activeWeapon === "beam") {
-  beam.getBeamGeom(state, cx, cy);
+  beam.getBeamGeom(state.beam, state.mouse, cx, cy);
   if (!state.paused && !state.gameOver) {
-    miasma.clearWithBeam(state, cx, cy);
+    miasma.clearWithBeam(state.miasma, state.beam, state.camera, state.time, cx, cy);
   }
 }
 
 
-world.drawObstacles(ctx, state, cx, cy); // draw terrain first
-enemies.drawEnemies(ctx, state, cx, cy);
-pickups.drawPickups(ctx, state, cx, cy);
-miasma.drawMiasma(ctx, state, cx, cy, w, h);
-world.drawWorldBorder(ctx, state, cx, cy);
-if (state.activeWeapon === "beam") {
-  beam.drawBeam(ctx, state, cx, cy);
-} else if (state.activeWeapon === "drill") {
-  drill.drawDrill(ctx, state, cx, cy);
-}
+  world.drawObstacles(ctx, state.miasma, state.obstacleGrid, state.camera, cx, cy); // draw terrain first
+  enemies.drawEnemies(ctx, state, cx, cy);
+  pickups.drawPickups(ctx, state.pickups, state.camera, cx, cy);
+  miasma.drawMiasma(ctx, state.miasma, state.camera, cx, cy, w, h);
+  world.drawWorldBorder(ctx, state.world, state.camera, cx, cy);
+  if (state.activeWeapon === "beam") {
+    beam.drawBeam(ctx, state.beam, cx, cy);
+  } else if (state.activeWeapon === "drill") {
+    drill.drawDrill(ctx, state.drill, state.mouse, state.activeWeapon, cx, cy);
+  }
 
 
   ctx.fillStyle = "#9a3b31";

@@ -1,5 +1,7 @@
+/** @typedef {import('../core/state.js').GameState} GameState */
 var els = null;
 
+/** @param {GameState} state */
 export function initHUD(state, opts = {}) {
   var root = document.getElementById('hud-root');
   if (!root) {
@@ -45,6 +47,7 @@ export function initHUD(state, opts = {}) {
   updateHUD(state);
 }
 
+/** @param {GameState} state */
 export function updateHUD(state) {
   if (!els) return;
 

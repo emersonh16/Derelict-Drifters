@@ -1,16 +1,21 @@
 
- // systems/miasma.js
+// systems/miasma.js
 // Big miasma grid with crystal regrowth + beam clearing.
 // Laser uses a thick world-space ray (with a tiny fan) so it cleanly sweeps.
+/**
+ * @typedef {import('../core/state.js').MiasmaState} MiasmaState
+ * @typedef {import('../core/state.js').BeamState} BeamState
+ */
 
-export function initMiasma(state, opts = {}) {
+export function initMiasma(opts = {}) {
   const halfCols = Math.floor((opts.cols ?? 400) / 2);
   const halfRows = Math.floor((opts.rows ?? 400) / 2);
   const cols = halfCols * 2;
   const rows = halfRows * 2;
   const size = cols * rows;
 
-  state.miasma = {
+  /** @type {MiasmaState} */
+  const miasma = {
     // grid
     tile: opts.tile ?? 14,
     halfCols, halfRows,
@@ -38,27 +43,28 @@ export function initMiasma(state, opts = {}) {
     dps: opts.dps ?? 35
 
   };
+  return miasma;
 }
 
-export function updateMiasma(state, dt) {
-  const s = state.miasma; if (!s) return;
+export function updateMiasma(s, time, dt) {
+  if (!s) return;
   s._accum += dt;
   const step = 1 / s.tickHz;
   while (s._accum >= step) {
     s._accum -= step;
-    regrowStep(state);
+    regrowStep(s, time);
   }
 }
 
-export function drawMiasma(ctx, state, cx, cy, w, h) {
-  const s = state.miasma; if (!s) return;
+export function drawMiasma(ctx, s, camera, cx, cy, w, h) {
+  if (!s) return;
   const t = s.tile;
 
   // visible world bounds
-  const leftW   = state.camera.x - w / 2;
-  const rightW  = state.camera.x + w / 2;
-  const topW    = state.camera.y - h / 2;
-  const bottomW = state.camera.y + h / 2;
+  const leftW   = camera.x - w / 2;
+  const rightW  = camera.x + w / 2;
+  const topW    = camera.y - h / 2;
+  const bottomW = camera.y + h / 2;
 
   // clamp to grid (grid coords centered on 0,0)
   const minGX = Math.max(-s.halfCols, Math.floor(leftW  / t) - 1);
@@ -72,9 +78,9 @@ export function drawMiasma(ctx, state, cx, cy, w, h) {
   ctx.beginPath();
 
   // compute first screen row start, then increment by tile size
-  let sy = Math.floor(minGY * t - state.camera.y + cy);
+  let sy = Math.floor(minGY * t - camera.y + cy);
   for (let gy = minGY; gy < maxGY; gy++, sy += t) {
-    let sx = Math.floor(minGX * t - state.camera.x + cx);
+    let sx = Math.floor(minGX * t - camera.x + cx);
     for (let gx = minGX; gx < maxGX; gx++, sx += t) {
       if (s.strength[idx(s, gx, gy)] === 1) {
         ctx.rect(sx, sy, t, t);
@@ -86,14 +92,13 @@ export function drawMiasma(ctx, state, cx, cy, w, h) {
   ctx.restore();
 }
 
-export function clearWithBeam(state, cx, cy) {
-  const s = state.miasma; const b = state.beam;
+export function clearWithBeam(s, b, camera, time, cx, cy) {
   if (!s || !b || b.mode === 'none') return;
 
   const t = s.tile;
-  const playerWX = state.camera.x;
-  const playerWY = state.camera.y;
-  const now = state.time;
+  const playerWX = camera.x;
+  const playerWY = camera.y;
+  const now = time;
 
   // -------- LASER: carve a thick, continuous ray (plus a tiny fan) --------
   if (b.mode === 'laser') {
@@ -108,7 +113,7 @@ export function clearWithBeam(state, cx, cy) {
 
     for (let i = 0; i < fan; i++) {
       const ang = start + i * dAng;
-      rayStampWorld(s, state, playerWX, playerWY, ang, b.range + t, thickness, now);
+      rayStampWorld(s, playerWX, playerWY, ang, b.range + t, thickness, now);
     }
     return;
   }
@@ -148,8 +153,7 @@ export function clearWithBeam(state, cx, cy) {
 }
 
 // ---------- Internals ----------
-function regrowStep(state) {
-  const s = state.miasma, now = state.time;
+function regrowStep(s, now) {
   const prev = s.strength;
   const next = s.strengthNext;
 
@@ -185,7 +189,7 @@ function regrowStep(state) {
 }
 
 // March a thick ray in WORLD space and clear tiles along it
-function rayStampWorld(s, state, oxW, oyW, ang, range, thickness, now) {
+function rayStampWorld(s, oxW, oyW, ang, range, thickness, now) {
   const t = s.tile;
   const step = t; // tile-sized step (fan rays cover rotation gaps)
   const cos = Math.cos(ang), sin = Math.sin(ang);

@@ -1,7 +1,9 @@
 // systems/beam.js — half-size beam with distinct laser core
+/** @typedef {import('../core/state.js').BeamState} BeamState */
 
-export function initBeam(state, opts = {}) {
-  state.beam = {
+export function initBeam(opts = {}) {
+  /** @type {BeamState} */
+  const beam = {
     // control
     t: clamp(opts.startT ?? 0.7, 0, 1),
     step: opts.wheelStep ?? 0.05,
@@ -50,18 +52,17 @@ export function initBeam(state, opts = {}) {
       halo:   'rgba(255, 220, 120, 0.35)'
     }
   };
+  return beam;
 }
 
-export function onWheelAdjust(state, deltaY) {
-  const b = state.beam;
+export function onWheelAdjust(b, deltaY) {
   const dir = deltaY > 0 ? -1 : 1; // wheel down => laser, wheel up => off
   b.t = clamp(b.t + dir * b.step, 0, 1);
 }
 
-export function getBeamGeom(state, cx, cy) {
-  const b = state.beam;
+export function getBeamGeom(b, mouse, cx, cy) {
   const t = b.t;
-  const ang = Math.atan2(state.mouse.y - cy, state.mouse.x - cx);
+  const ang = Math.atan2(mouse.y - cy, mouse.x - cx);
 
   if (t <= b.tNoBeamEnd) {
     return Object.assign(b, { mode: 'none', range: 0, halfArc: 0, angle: ang, radius: 0 });
@@ -85,8 +86,7 @@ export function getBeamGeom(state, cx, cy) {
   return Object.assign(b, { mode: 'laser', range: b.laserRange, halfArc, angle: ang, radius: 0 });
 }
 
-export function drawBeam(ctx, state, cx, cy) {
-  const b = state.beam;
+export function drawBeam(ctx, b, cx, cy) {
   if (b.mode === 'none') return;
   if (b.mode === 'bubble') return drawCircle(ctx, cx, cy, b.radius, b);
   if (b.mode === 'cone')   return drawCone(ctx, cx, cy, b.halfArc, b.range, b);
