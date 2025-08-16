@@ -1,16 +1,7 @@
 // core/game.js
 import { config } from "../core/config.js";
-import { initBeam, drawBeam, onWheelAdjust, getBeamGeom } from "../systems/beam.js";
-import {
-  initMiasma, updateMiasma, drawMiasma, clearWithBeam,
-  worldToIdx, isFog
-} from "../systems/miasma.js";
-import { initEnemies, spawnInitialEnemies, updateEnemies, drawEnemies } from "../systems/enemies.js";
-import { initHUD, updateHUD } from "../ui/hud.js";
-import { updatePickups, drawPickups } from "../systems/pickups.js";
-import { initWorld, clampToWorld, drawWorldBorder, drawObstacles, collideWithObstacles, carveObstaclesWithDrillTri } from "../systems/world.js";
-import { initDrill, drawDrill, getDrillTriangleWorld } from "../systems/drill.js";
-import { initDevHUD, updateDevHUD, drawDevHUD, toggleDevHUD } from "../ui/devhud.js";
+import { beam, miasma, enemies, pickups, world, drill } from "../systems/index.js";
+import { hud, devhud } from "../ui/index.js";
 
 
 
@@ -68,7 +59,7 @@ canvas.addEventListener("mousemove", (e) => {
 
 canvas.addEventListener("wheel", (e) => {
   if (state.paused || state.gameOver) return;
-  onWheelAdjust(state, e.deltaY);
+  beam.onWheelAdjust(state, e.deltaY);
   e.preventDefault();
 }, { passive: false });
 
@@ -110,7 +101,7 @@ window.addEventListener("keyup", (e) => {
 
 window.addEventListener("keydown", (e) => {
   if (e.repeat) return;
-  if (e.key.toLowerCase() === "p") toggleDevHUD(state);
+  if (e.key.toLowerCase() === "p") devhud.toggleDevHUD(state);
 });
 
 
@@ -138,19 +129,19 @@ function startGame() {
   state.pendingMouse.y = state.mouse.y;
 
   // world + systems (same order as first load)
-  initMiasma(state, config.miasma);                 // brand-new fog grid
-  initWorld(state, config.world);                   // world depends on miasma size
-  initBeam(state, config.beam);
-  initEnemies(state, config.enemies);
-  spawnInitialEnemies(state, config.enemies.max);
-  initHUD(state, config.hud);
+  miasma.initMiasma(state, config.miasma);                 // brand-new fog grid
+  world.initWorld(state, config.world);                   // world depends on miasma size
+  beam.initBeam(state, config.beam);
+  enemies.initEnemies(state, config.enemies);
+  enemies.spawnInitialEnemies(state, config.enemies.max);
+  hud.initHUD(state, config.hud);
 }
 
 
 // ---- Init ----
 startGame();
-initDrill(state);
-initDevHUD(state);
+drill.initDrill(state);
+devhud.initDevHUD(state);
 
 
 // ---- Update ----
@@ -173,24 +164,24 @@ function update(dt) {
     state.camera.y += vy * speed * dt;
 
     // Prevent player from passing through obstacles
-    collideWithObstacles(state, state.camera, state.player.r);
+    world.collideWithObstacles(state, state.camera, state.player.r);
   }
 
-  clampToWorld(state);
+  world.clampToWorld(state);
 
 
 // --- Drill carving using triangle hitbox ---
 if (state.activeWeapon === "drill" && state.drill) {
-  const tri = getDrillTriangleWorld(state);
-  carveObstaclesWithDrillTri(state, tri, dt, 2); // pad=2 for small buffer
+  const tri = drill.getDrillTriangleWorld(state);
+  world.carveObstaclesWithDrillTri(state, tri, dt, 2); // pad=2 for small buffer
 }
 
 
 
 
-  updateMiasma(state, dt);
-  updateEnemies(state, dt);
-  updatePickups(state, dt);
+  miasma.updateMiasma(state, dt);
+  enemies.updateEnemies(state, dt);
+  pickups.updatePickups(state, dt);
 
 
 
@@ -207,8 +198,8 @@ if (state.activeWeapon === "drill" && state.drill) {
   for (let dy = -state.player.r; dy <= state.player.r && !inFog; dy += step) {
     for (let dx = -state.player.r; dx <= state.player.r; dx += step) {
       if (dx*dx + dy*dy > state.player.r * state.player.r) continue;
-      const idx = worldToIdx(state.miasma, state.camera.x + dx, state.camera.y + dy);
-      if (isFog(state.miasma, idx)) { inFog = true; break; }
+      const idx = miasma.worldToIdx(state.miasma, state.camera.x + dx, state.camera.y + dy);
+      if (miasma.isFog(state.miasma, idx)) { inFog = true; break; }
     }
   }
   if (inFog) {
@@ -226,14 +217,14 @@ if (state.activeWeapon === "drill" && state.drill) {
   }
 
   // --- Laser energy drain/recharge ---
-  const beam = state.beam;
-  if (state.activeWeapon === "beam" && beam.mode === "laser") {
+  const beamState = state.beam;
+  if (state.activeWeapon === "beam" && beamState.mode === "laser") {
     state.laserEnergy -= config.game.laserDrainRate * dt;
     if (state.laserEnergy <= 0) {
       state.laserEnergy = 0;
       // auto shut off laser if empty
-      beam.t = beam.tConeEnd - 0.01; // forces it back to cone mode
-      getBeamGeom(state, canvas.width / 2, canvas.height / 2);
+      beamState.t = beamState.tConeEnd - 0.01; // forces it back to cone mode
+      beam.getBeamGeom(state, canvas.width / 2, canvas.height / 2);
     }
   } else {
     state.laserEnergy = Math.min(
@@ -243,7 +234,7 @@ if (state.activeWeapon === "drill" && state.drill) {
   }
 
 
-  updateHUD(state);
+  hud.updateHUD(state);
 }
 
 // ---- Draw ----
@@ -255,22 +246,22 @@ function draw() {
   ctx.fillRect(0, 0, w, h);
 
 if (state.activeWeapon === "beam") {
-  getBeamGeom(state, cx, cy);
+  beam.getBeamGeom(state, cx, cy);
   if (!state.paused && !state.gameOver) {
-    clearWithBeam(state, cx, cy);
+    miasma.clearWithBeam(state, cx, cy);
   }
 }
 
 
-drawObstacles(ctx, state, cx, cy); // draw terrain first
-drawEnemies(ctx, state, cx, cy);
-drawPickups(ctx, state, cx, cy);
-drawMiasma(ctx, state, cx, cy, w, h);
-drawWorldBorder(ctx, state, cx, cy);
+world.drawObstacles(ctx, state, cx, cy); // draw terrain first
+enemies.drawEnemies(ctx, state, cx, cy);
+pickups.drawPickups(ctx, state, cx, cy);
+miasma.drawMiasma(ctx, state, cx, cy, w, h);
+world.drawWorldBorder(ctx, state, cx, cy);
 if (state.activeWeapon === "beam") {
-  drawBeam(ctx, state, cx, cy);
+  beam.drawBeam(ctx, state, cx, cy);
 } else if (state.activeWeapon === "drill") {
-  drawDrill(ctx, state, cx, cy);
+  drill.drawDrill(ctx, state, cx, cy);
 }
 
 
@@ -327,8 +318,8 @@ function loop(now) {
   draw();
 
   // Dev HUD: update numbers, then draw the tiny box (top-right)
-  updateDevHUD(state, state.dt);
-  drawDevHUD(ctx, state);
+  devhud.updateDevHUD(state, state.dt);
+  devhud.drawDevHUD(ctx, state);
 
   requestAnimationFrame(loop);
 }

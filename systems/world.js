@@ -204,7 +204,7 @@ export function collideWithObstacles(state, entity, radius) {
   }
 }
 
-// Drill carving (triangle-accurate; no corridor thickening)
+  // Drill carving (triangle-accurate; no corridor thickening)
 export function carveObstaclesWithDrillTri(state, tri, dt, pad = 0) {
   const t = state.miasma.tile;
   const cols = state.miasma.cols;
@@ -225,7 +225,7 @@ export function carveObstaclesWithDrillTri(state, tri, dt, pad = 0) {
       const cy = row * t - state.miasma.halfRows * t + t * 0.5;
 
       // Only clear if the tile center is inside the drill triangle
-      if (pointInTriBarycentric(cx, cy, tri.a, tri.b, tri.c)) {
+      if (pointInTriangle(cx, cy, tri.a, tri.b, tri.c)) {
         const idx = row * cols + col;
         if (grid[idx] === 1) grid[idx] = 0;
       }
@@ -234,7 +234,7 @@ export function carveObstaclesWithDrillTri(state, tri, dt, pad = 0) {
 }
 
 // Barycentric point-in-triangle (robust & fast)
-function pointInTriBarycentric(px, py, a, b, c) {
+export function pointInTriangle(px, py, a, b, c) {
   const v0x = c.x - a.x, v0y = c.y - a.y;
   const v1x = b.x - a.x, v1y = b.y - a.y;
   const v2x = px - a.x, v2y = py - a.y;
