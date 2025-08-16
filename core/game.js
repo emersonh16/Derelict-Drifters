@@ -220,7 +220,7 @@ if (state.activeWeapon === "drill" && state.drill) {
 
   // --- Laser energy drain/recharge ---
   const beam = state.beam;
-  if (beam.mode === "laser") {
+  if (state.activeWeapon === "beam" && beam.mode === "laser") {
     state.laserEnergy -= config.game.laserDrainRate * dt;
     if (state.laserEnergy <= 0) {
       state.laserEnergy = 0;
