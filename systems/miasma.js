@@ -1,13 +1,3 @@
-// systems/miasma.js
-// Big miasma grid with crystal regrowth + beam clearing.
-// Laser uses a thick world-space ray (with a tiny fan) so it cleanly sweeps.
-
-export function initMiasma(state, opts = {}) {
-  const halfCols = Math.floor((opts.cols ?? 400) / 2);
-  const halfRows = Math.floor((opts.rows ?? 400) / 2);
-  const cols = halfCols * 2;
-  const rows = halfRows * 2;
-  const size = cols * rows;
 
   state.miasma = {
     // grid
@@ -34,10 +24,28 @@ export function initMiasma(state, opts = {}) {
     laserFanMinDeg:         opts.laserFanMinDeg         ?? 0.25,
 
     // NEW: damage per second when the player is in fog
-    dps: opts.dps ?? 35
+    dps: opts.dps ?? 35,
+
+    // partitioning
+    chunkSize: opts.chunkSize ?? 32,              // tiles per chunk side
+    chunkCols: 0,
+    chunkRows: 0,
+    chunks: []
 
   };
-}
+
+  // build chunk map tracking fog tiles
+  const s = state.miasma;
+  s.chunkCols = Math.ceil(cols / s.chunkSize);
+  s.chunkRows = Math.ceil(rows / s.chunkSize);
+  s.chunks = Array.from({ length: s.chunkCols * s.chunkRows }, () => new Set());
+  for (let gy = -halfRows; gy < halfRows; gy++) {
+    for (let gx = -halfCols; gx < halfCols; gx++) {
+      const i = idx(s, gx, gy);
+      const ci = chunkIdx(s, gx, gy);
+      s.chunks[ci].add(i);
+    }
+  }
 
 export function updateMiasma(state, dt) {
   const s = state.miasma; if (!s) return;
@@ -70,12 +78,22 @@ export function drawMiasma(ctx, state, cx, cy, w, h) {
   ctx.fillStyle = 'rgba(120, 60, 160, 0.50)';
   ctx.beginPath();
 
-  // compute first screen row start, then increment by tile size
-  let sy = Math.floor(minGY * t - state.camera.y + cy);
-  for (let gy = minGY; gy < maxGY; gy++, sy += t) {
-    let sx = Math.floor(minGX * t - state.camera.x + cx);
-    for (let gx = minGX; gx < maxGX; gx++, sx += t) {
-      if (s.strength[idx(s, gx, gy)] === 1) {
+  // iterate over only visible chunks
+  const cs = s.chunkSize;
+  const minCX = Math.floor((minGX + s.halfCols) / cs);
+  const maxCX = Math.floor((maxGX - 1 + s.halfCols) / cs);
+  const minCY = Math.floor((minGY + s.halfRows) / cs);
+  const maxCY = Math.floor((maxGY - 1 + s.halfRows) / cs);
+
+  for (let cY = minCY; cY <= maxCY; cY++) {
+    for (let cX = minCX; cX <= maxCX; cX++) {
+      const chunk = s.chunks[cY * s.chunkCols + cX];
+      for (const i of chunk) {
+        const gx = (i % s.cols) - s.halfCols;
+        const gy = (i / s.cols | 0) - s.halfRows;
+        if (gx < minGX || gx >= maxGX || gy < minGY || gy >= maxGY) continue;
+        const sx = Math.floor(gx * t - state.camera.x + cx);
+        const sy = Math.floor(gy * t - state.camera.y + cy);
         ctx.rect(sx, sy, t, t);
       }
     }
@@ -120,28 +138,46 @@ export function clearWithBeam(state, cx, cy) {
   const minGY = Math.floor((playerWY - b.range) / t);
   const maxGY = Math.ceil ((playerWY + b.range) / t);
 
+  // clamp grid bounds and compute chunk ranges
+  const clMinGX = Math.max(minGX, -s.halfCols);
+  const clMaxGX = Math.min(maxGX, s.halfCols - 1);
+  const clMinGY = Math.max(minGY, -s.halfRows);
+  const clMaxGY = Math.min(maxGY, s.halfRows - 1);
+
+  const cs = s.chunkSize;
+  const minCX = Math.floor((clMinGX + s.halfCols) / cs);
+  const maxCX = Math.floor((clMaxGX + s.halfCols) / cs);
+  const minCY = Math.floor((clMinGY + s.halfRows) / cs);
+  const maxCY = Math.floor((clMaxGY + s.halfRows) / cs);
+
   // cache beam direction + cosine threshold
   const bx = Math.cos(b.angle);
   const by = Math.sin(b.angle);
   const cosThresh = Math.cos(b.halfArc);
 
-  for (let gy = Math.max(minGY, -s.halfRows); gy <= Math.min(maxGY, s.halfRows - 1); gy++) {
-    for (let gx = Math.max(minGX, -s.halfCols); gx <= Math.min(maxGX, s.halfCols - 1); gx++) {
-      const wx = gx * t + t * 0.5;
-      const wy = gy * t + t * 0.5;
-      const dx = wx - playerWX, dy = wy - playerWY;
-      const r2 = dx*dx + dy*dy;
-      if (r2 > maxR2) continue;
+  for (let cY = minCY; cY <= maxCY; cY++) {
+    for (let cX = minCX; cX <= maxCX; cX++) {
+      const chunk = s.chunks[cY * s.chunkCols + cX];
+      for (const i of chunk) {
+        const gx = (i % s.cols) - s.halfCols;
+        const gy = (i / s.cols | 0) - s.halfRows;
+        if (gx < clMinGX || gx > clMaxGX || gy < clMinGY || gy > clMaxGY) continue;
+        const wx = gx * t + t * 0.5;
+        const wy = gy * t + t * 0.5;
+        const dx = wx - playerWX, dy = wy - playerWY;
+        const r2 = dx*dx + dy*dy;
+        if (r2 > maxR2) continue;
 
-      if (b.mode === 'bubble') {
-        setCleared(s, gx, gy, now);
-        continue;
+        if (b.mode === 'bubble') {
+          setCleared(s, gx, gy, now);
+          continue;
+        }
+
+        // dot( norm(dx,dy), beamDir ) >= cos(halfArc)
+        const inv = r2 > 0 ? 1 / Math.sqrt(r2) : 0;
+        const dot = (dx * inv) * bx + (dy * inv) * by;
+        if (dot >= cosThresh) setCleared(s, gx, gy, now);
       }
-
-      // dot( norm(dx,dy), beamDir ) >= cos(halfArc)
-      const inv = r2 > 0 ? 1 / Math.sqrt(r2) : 0;
-      const dot = (dx * inv) * bx + (dy * inv) * by;
-      if (dot >= cosThresh) setCleared(s, gx, gy, now);
     }
   }
 }
@@ -173,7 +209,11 @@ function regrowStep(state) {
 
       if (adj > 0) {
         const p = 1 - Math.pow(1 - s.baseChance, adj);
-        if (Math.random() < p) next[i] = 1;
+        if (Math.random() < p) {
+          next[i] = 1;
+          const ci = chunkIdx(s, gx, gy);
+          s.chunks[ci].add(i);
+        }
       }
     }
   }
@@ -189,6 +229,7 @@ function rayStampWorld(s, state, oxW, oyW, ang, range, thickness, now) {
   const step = t; // tile-sized step (fan rays cover rotation gaps)
   const cos = Math.cos(ang), sin = Math.sin(ang);
   const r2 = (thickness * 0.5) ** 2;
+  const cs = s.chunkSize;
 
   for (let d = 0; d <= range; d += step) {
     const pxW = oxW + cos * d;
@@ -199,12 +240,28 @@ function rayStampWorld(s, state, oxW, oyW, ang, range, thickness, now) {
     const minGY = Math.floor((pyW - thickness) / t);
     const maxGY = Math.ceil ((pyW + thickness) / t);
 
-    for (let gy = Math.max(minGY, -s.halfRows); gy <= Math.min(maxGY, s.halfRows - 1); gy++) {
-      const cyW = gy * t + t * 0.5;
-      for (let gx = Math.max(minGX, -s.halfCols); gx <= Math.min(maxGX, s.halfCols - 1); gx++) {
-        const cxW = gx * t + t * 0.5;
-        const dx = cxW - pxW, dy = cyW - pyW;
-        if (dx*dx + dy*dy <= r2) setCleared(s, gx, gy, now);
+    const clMinGX = Math.max(minGX, -s.halfCols);
+    const clMaxGX = Math.min(maxGX, s.halfCols - 1);
+    const clMinGY = Math.max(minGY, -s.halfRows);
+    const clMaxGY = Math.min(maxGY, s.halfRows - 1);
+
+    const minCX = Math.floor((clMinGX + s.halfCols) / cs);
+    const maxCX = Math.floor((clMaxGX + s.halfCols) / cs);
+    const minCY = Math.floor((clMinGY + s.halfRows) / cs);
+    const maxCY = Math.floor((clMaxGY + s.halfRows) / cs);
+
+    for (let cY = minCY; cY <= maxCY; cY++) {
+      for (let cX = minCX; cX <= maxCX; cX++) {
+        const chunk = s.chunks[cY * s.chunkCols + cX];
+        for (const i of chunk) {
+          const gx = (i % s.cols) - s.halfCols;
+          const gy = (i / s.cols | 0) - s.halfRows;
+          if (gx < clMinGX || gx > clMaxGX || gy < clMinGY || gy > clMaxGY) continue;
+          const cxW = gx * t + t * 0.5;
+          const cyW = gy * t + t * 0.5;
+          const dx = cxW - pxW, dy = cyW - pyW;
+          if (dx*dx + dy*dy <= r2) setCleared(s, gx, gy, now);
+        }
       }
     }
   }
@@ -217,10 +274,22 @@ function idx(s, gx, gy) {
   return y * s.stride + x; // cached stride
 }
 
+function chunkIdx(s, gx, gy) {
+  const x = gx + s.halfCols;
+  const y = gy + s.halfRows;
+  const cx = Math.floor(x / s.chunkSize);
+  const cy = Math.floor(y / s.chunkSize);
+  return cy * s.chunkCols + cx;
+}
+
 function setCleared(s, gx, gy, now) {
   const i = idx(s, gx, gy);
-  s.strength[i] = 0;
-  s.lastCleared[i] = now;
+  if (s.strength[i] === 1) {
+    s.strength[i] = 0;
+    s.lastCleared[i] = now;
+    const ci = chunkIdx(s, gx, gy);
+    s.chunks[ci].delete(i);
+  }
 }
 
 function toRad(deg){ return (deg * Math.PI)/180; }
