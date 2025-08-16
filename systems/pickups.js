@@ -3,6 +3,14 @@ export function spawnPickup(state, x, y, type = "scrap") {
   state.pickups.push({ x, y, type, r: 6 });
 }
 
+export function spawnScrapBurst(state, x, y, count) {
+  for (let i = 0; i < count; i++) {
+    const nx = x + Math.random() * 10 - 5;
+    const ny = y + Math.random() * 10 - 5;
+    spawnPickup(state, nx, ny, "scrap");
+  }
+}
+
 export function updatePickups(state, dt) {
   const px = state.camera.x;
   const py = state.camera.y;

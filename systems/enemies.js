@@ -1,5 +1,5 @@
 // systems/enemies.js
-import { spawnPickup } from "./pickups.js";
+import { spawnPickup, spawnScrapBurst } from "./pickups.js";
 import { collideWithObstacles } from "./world.js";
 import { getDrillTriangleWorld } from "./drill.js";
 
@@ -183,13 +183,9 @@ export function updateEnemies(state, dt) {
     // Death & drops
     if (m.hp <= 0) {
       if (m.type === "fast") {
-        for (let k = 0; k < 5; k++) {
-          spawnPickup(state, m.x + Math.random() * 10 - 5, m.y + Math.random() * 10 - 5, "scrap");
-        }
+        spawnScrapBurst(state, m.x, m.y, 5);
       } else if (m.type === "tank") {
-        for (let k = 0; k < 5; k++) {
-          spawnPickup(state, m.x + Math.random() * 10 - 5, m.y + Math.random() * 10 - 5, "scrap");
-        }
+        spawnScrapBurst(state, m.x, m.y, 5);
       } else {
         if (Math.random() < 0.1) {
           spawnPickup(state, m.x, m.y, "health");
