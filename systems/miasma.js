@@ -1,101 +1,69 @@
 // systems/miasma.js
-// Weather-like rolling fog banks driven by wind.
+// Binary fog grid with moving line/band patterns.
 
-// ---- Public API -----------------------------------------------------------
 
 export function initMiasma(state, opts = {}) {
-  // World dimensions kept for compatibility with previous grid system
-  const cols = opts.cols ?? 400;
-  const rows = opts.rows ?? 400;
-  const tile = opts.tile ?? 14;
+  const cols = opts.cols ?? 200;
+  const rows = opts.rows ?? 200;
+  const tile = opts.tile ?? 16;
   const halfCols = Math.floor(cols / 2);
   const halfRows = Math.floor(rows / 2);
+  const size = cols * rows;
+
+  // Start all clear
+  const grid = new Uint8Array(size).fill(0);
 
   state.miasma = {
-    // world metrics (used by other systems)
-    tile, cols, rows, halfCols, halfRows,
+    cols, rows, tile, halfCols, halfRows, size,
+    grid,
 
-    // damage when in dense fog
     dps: opts.dps ?? 35,
 
-    // view size (updated each draw)
+    // movement
+    scrollSpeed: opts.scrollSpeed ?? 10, // tiles per second
+    offset: 0,
+
     viewW: 0,
     viewH: 0,
 
-    // wind
-    windAngle: Math.random() * Math.PI * 2,
-    windSpeed: opts.windSpeed ?? 20,
-    _windTimer: randRange(10, 30),
+    // line config
+    bandThickness: opts.bandThickness ?? 8, // in rows
+    bandSpacing: opts.bandSpacing ?? 20,    // gap between bands
 
-    // fog banks
-    banks: [],
-    bankMinRadius: opts.bankMinRadius ?? 200,
-    bankMaxRadius: opts.bankMaxRadius ?? 400,
-    baseAlpha: opts.baseAlpha ?? 0.4,
-    denseThreshold: opts.denseThreshold ?? 0.6,
-
-    // initial + growth hooks
-    baseBankCount: opts.bankCount ?? 8,
-    bankCountGrowth: opts.bankCountGrowth ?? 0, // banks per second (hook)
-    spawnInterval: opts.spawnInterval ?? 0,     // hook for future spawn tuning
-    spawnIntervalGrowth: opts.spawnIntervalGrowth ?? 0, // hook
-
-    age: 0,
+    // --- NEW: beam clears persist ---
+    clearDuration: opts.clearDuration ?? 1.2,   // seconds to stay clear
+    clearTTL: new Float32Array(size).fill(0),   // per-tile timer
   };
-
-  // spawn initial banks upwind/off-screen
-  const s = state.miasma;
-  for (let i = 0; i < s.baseBankCount; i++) {
-    spawnBank(s, state, true);
-  }
 }
+
 
 export function updateMiasma(state, dt) {
   const s = state.miasma; if (!s) return;
-  s.age += dt;
 
-  // ---- Wind direction changes ----
-  s._windTimer -= dt;
-  if (s._windTimer <= 0) {
-    s._windTimer = randRange(10, 30);
-    const roll = Math.random();
-    let delta;
-    if (roll < 0.80) {
-      delta = randSign() * degToRad(randRange(20, 40));
-    } else if (roll < 0.95) {
-      delta = randSign() * degToRad(90);
-    } else {
-      delta = degToRad(180);
-    }
-    s.windAngle = normalizeAngle(s.windAngle + delta);
+  // advance scroll offset
+  s.offset += s.scrollSpeed * dt;
+  if (s.offset >= s.bandSpacing + s.bandThickness) {
+    s.offset = 0;
   }
 
-  // ---- Move banks ----
-  const vx = Math.cos(s.windAngle) * s.windSpeed;
-  const vy = Math.sin(s.windAngle) * s.windSpeed;
+  // regenerate grid with moving bands
+  for (let row = 0; row < s.rows; row++) {
+    for (let col = 0; col < s.cols; col++) {
+      const idx = row * s.cols + col;
 
-  const w = s.viewW;
-  const h = s.viewH;
-  const halfDiag = Math.sqrt(w * w + h * h) / 2;
+        // decay any previous clears
+      if (s.clearTTL[idx] > 0) {
+        s.clearTTL[idx] = Math.max(0, s.clearTTL[idx] - dt);
+      }
 
-  for (let i = s.banks.length - 1; i >= 0; i--) {
-    const b = s.banks[i];
-    b.x += vx * dt;
-    b.y += vy * dt;
+      // Create horizontal bands moving downward
+      const bandPos = (row + Math.floor(s.offset)) % (s.bandSpacing + s.bandThickness);
+      const bandActive = bandPos < s.bandThickness;
 
-    const dPar = (b.x - state.camera.x) * Math.cos(s.windAngle) +
-                 (b.y - state.camera.y) * Math.sin(s.windAngle);
-    const limit = halfDiag + Math.max(b.rx, b.ry);
-    if (dPar > limit) {
-      s.banks.splice(i, 1);
-      spawnBank(s, state, true);
+      // only fog if band is active AND not recently cleared
+      s.grid[idx] = (bandActive && s.clearTTL[idx] <= 0) ? 1 : 0;
+
     }
-  }
-
-  // ---- Increase bank count over time (hook) ----
-  const desired = Math.floor(s.baseBankCount + s.bankCountGrowth * s.age);
-  while (s.banks.length < desired) {
-    spawnBank(s, state, true);
   }
 }
 
@@ -108,71 +76,103 @@ export function drawMiasma(state, ctx) {
   s.viewH = h;
 
   ctx.save();
-  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = "rgba(120,60,160,0.9)"; // solid purple fog
 
-  for (const b of s.banks) {
-    const x = b.x - state.camera.x + cx;
-    const y = b.y - state.camera.y + cy;
-    const maxR = Math.max(b.rx, b.ry);
-    const grad = ctx.createRadialGradient(x, y, 0, x, y, maxR);
-    grad.addColorStop(0, `rgba(120,60,160,${b.alpha})`);
-    grad.addColorStop(1, 'rgba(120,60,160,0)');
+  for (let row = 0; row < s.rows; row++) {
+    for (let col = 0; col < s.cols; col++) {
+      const idx = row * s.cols + col;
+      if (s.grid[idx] === 0) continue;
 
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.ellipse(x, y, b.rx, b.ry, 0, 0, Math.PI * 2);
-    ctx.fill();
+      const wx = (col - s.halfCols) * s.tile - state.camera.x + cx;
+      const wy = (row - s.halfRows) * s.tile - state.camera.y + cy;
+
+      ctx.fillRect(wx, wy, s.tile, s.tile);
+    }
   }
 
   ctx.restore();
 }
 
-// ---- Compatibility No-Ops -----------------------------------------------
+// ---- Beam clearing still works (overrides bands locally) ----
+// ---- Beam clearing works with beam geometry from getBeamGeom(state, cx, cy)
+export function clearWithBeam(state, geom) {
+  const s = state.miasma;
+  if (!s || !geom) return;
 
-export function clearWithBeam(state, cx, cy) {}
-export function worldToIdx(miasma, wx, wy) { return -1; }
-export function isFog(miasma, idx) { return false; }
+  // beam geom is screen-space; normalize possible shapes
+  const poly = normalizeBeamPolygon(geom);
+  if (!poly || poly.length < 3) return;
 
-// ---- Density Query -------------------------------------------------------
+  // need screen center to convert world->screen; drawMiasma stored it
+  const cx = (s.viewW ?? 0) / 2;
+  const cy = (s.viewH ?? 0) / 2;
 
-export function isDenseFogAt(state, x, y) {
-  const s = state.miasma; if (!s) return false;
-  let opacity = 0;
-  for (const b of s.banks) {
-    const dx = (x - b.x) / b.rx;
-    const dy = (y - b.y) / b.ry;
-    const d = dx * dx + dy * dy;
-    if (d <= 1) {
-      const contrib = (1 - d) * b.alpha;
-      opacity += contrib;
-      if (opacity >= s.denseThreshold) return true;
+  for (let row = 0; row < s.rows; row++) {
+    for (let col = 0; col < s.cols; col++) {
+      const idx = row * s.cols + col;
+      if (s.grid[idx] === 0) continue;
+
+      // world → screen (center of the tile)
+      const wx = (col - s.halfCols + 0.5) * s.tile - state.camera.x + cx;
+      const wy = (row - s.halfRows + 0.5) * s.tile - state.camera.y + cy;
+
+        if (pointInPolygon(wx, wy, poly)) {
+        s.clearTTL[idx] = s.clearDuration;  // keep clear for a while
+        s.grid[idx] = 0;                    // clear immediately this frame
+      }
+
     }
   }
-  return false;
 }
 
-// ---- Internals -----------------------------------------------------------
+// Accept several possible shapes of beam geometry and return an array of [x,y]
+function normalizeBeamPolygon(geom) {
+  // Already a polygon? (e.g., [[x,y], [x,y], ...])
+  if (Array.isArray(geom) && geom.length && Array.isArray(geom[0])) {
+    return geom;
+  }
+  // Common property names from beam helpers
+  if (Array.isArray(geom?.polygon)) return geom.polygon;
+  if (Array.isArray(geom?.poly)) return geom.poly;
+  if (Array.isArray(geom?.points)) return geom.points;
+  if (Array.isArray(geom?.pts)) return geom.pts;
 
-function spawnBank(s, state, upwind) {
-  const angle = s.windAngle;
-  const w = s.viewW || 800;
-  const h = s.viewH || 600;
-  const maxR = s.bankMaxRadius;
-  const dist = Math.sqrt(w * w + h * h) / 2 + maxR;
-  const offset = upwind ? -dist : dist;
-  const perp = angle + Math.PI / 2;
-  const spread = Math.max(w, h);
-  const cx = state.camera.x + Math.cos(angle) * offset +
-             Math.cos(perp) * (Math.random() - 0.5) * spread;
-  const cy = state.camera.y + Math.sin(angle) * offset +
-             Math.sin(perp) * (Math.random() - 0.5) * spread;
-  const rx = randRange(s.bankMinRadius, s.bankMaxRadius);
-  const ry = randRange(s.bankMinRadius, s.bankMaxRadius);
-  s.banks.push({ x: cx, y: cy, rx, ry, alpha: s.baseAlpha });
+  // Triangle or cone pieces?
+  if (geom?.a && geom?.b && geom?.c) return [geom.a, geom.b, geom.c];
+  if (geom?.p0 && geom?.p1 && geom?.p2) return [geom.p0, geom.p1, geom.p2];
+
+  // Unknown shape -> no-op
+  return null;
 }
 
-function randRange(min, max) { return Math.random() * (max - min) + min; }
-function randSign() { return Math.random() < 0.5 ? -1 : 1; }
-function degToRad(d) { return d * Math.PI / 180; }
-function normalizeAngle(a) { a %= Math.PI * 2; return a < 0 ? a + Math.PI * 2 : a; }
 
+// standard point-in-polygon
+function pointInPolygon(x, y, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i][0], yi = poly[i][1];
+    const xj = poly[j][0], yj = poly[j][1];
+    const intersect = ((yi > y) !== (yj > y)) &&
+      (x < (xj - xi) * (y - yi) / (yj - yi + 0.00001) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+// ---- Helpers -------------------------------------------------------------
+export function worldToIdx(miasma, wx, wy) {
+  const col = Math.floor(wx / miasma.tile) + miasma.halfCols;
+  const row = Math.floor(wy / miasma.tile) + miasma.halfRows;
+  if (col < 0 || col >= miasma.cols || row < 0 || row >= miasma.rows) return -1;
+  return row * miasma.cols + col;
+}
+
+export function isFog(miasma, idx) {
+  if (idx < 0 || idx >= miasma.size) return false;
+  return miasma.grid[idx] === 1;
+}
+
+export function isDenseFogAt(state, x, y) {
+  const idx = worldToIdx(state.miasma, x, y);
+  return isFog(state.miasma, idx);
+}

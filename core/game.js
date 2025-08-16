@@ -2,9 +2,8 @@
 import { config } from "../core/config.js";
 import { initBeam, drawBeam, onWheelAdjust, getBeamGeom } from "../systems/beam.js";
 import {
-  initMiasma, updateMiasma, drawMiasma, clearWithBeam,
-  worldToIdx, isFog
-} from "../systems/miasma.js";
+  initMiasma, updateMiasma, drawMiasma, clearWithBeam, worldToIdx, isFog, isDenseFogAt} from "../systems/miasma.js";
+
 import { initEnemies, spawnInitialEnemies, updateEnemies, drawEnemies } from "../systems/enemies.js";
 import { initHUD, updateHUD } from "../ui/hud.js";
 import { updatePickups, drawPickups } from "../systems/pickups.js";
@@ -201,21 +200,26 @@ if (state.activeWeapon === "drill" && state.drill) {
     state.gameOver = true;
   }
 
-  // Miasma damage
-  const step = state.miasma.tile * 0.5;
+  // Miasma damage (binary via isDenseFogAt)
   let inFog = false;
+  const step = state.miasma.tile * 0.5;
+
   for (let dy = -state.player.r; dy <= state.player.r && !inFog; dy += step) {
     for (let dx = -state.player.r; dx <= state.player.r; dx += step) {
       if (dx*dx + dy*dy > state.player.r * state.player.r) continue;
-      const idx = worldToIdx(state.miasma, state.camera.x + dx, state.camera.y + dy);
-      if (isFog(state.miasma, idx)) { inFog = true; break; }
+      if (isDenseFogAt(state, state.camera.x + dx, state.camera.y + dy)) {
+        inFog = true;
+        break;
+      }
     }
   }
+
   if (inFog) {
-  state.health -= state.miasma.dps * dt;
-  state.damageFlash = 0.2; // trigger red flash
-  if (state.health < 0) state.health = 0;
-}
+    state.health -= state.miasma.dps * dt;
+    state.damageFlash = 0.2; // trigger red flash
+    if (state.health < 0) state.health = 0;
+  }
+
 
 
   state.damageFlash = Math.max(0, state.damageFlash - dt);
@@ -254,12 +258,18 @@ function draw() {
   ctx.fillStyle = "#0c0b10";
   ctx.fillRect(0, 0, w, h);
 
-  if (state.activeWeapon === "beam") {
-    getBeamGeom(state, cx, cy);
-    if (!state.paused && !state.gameOver) {
-      clearWithBeam(state, cx, cy);
-    }
+if (state.activeWeapon === "beam") {
+  const geom = getBeamGeom(state, cx, cy);     // <- get beam geometry
+  if (state.miasma) {                          // store viewport for conversion
+    state.miasma.viewW = canvas.width;
+    state.miasma.viewH = canvas.height;
   }
+  if (!state.paused && !state.gameOver) {
+    clearWithBeam(state, geom);                // <- pass geometry, not cx,cy
+  }
+}
+
+
 
   drawObstacles(ctx, state, cx, cy); // draw terrain first
   drawEnemies(ctx, state, cx, cy);
