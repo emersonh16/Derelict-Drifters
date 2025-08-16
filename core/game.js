@@ -10,6 +10,7 @@ import { initHUD, updateHUD } from "../ui/hud.js";
 import { updatePickups, drawPickups } from "../systems/pickups.js";
 import { initWorld, clampToWorld, drawWorldBorder, drawObstacles, collideWithObstacles, carveObstaclesWithDrillTri } from "../systems/world.js";
 import { initDrill, drawDrill, getDrillTriangleWorld } from "../systems/drill.js";
+import { initDevHUD, updateDevHUD, drawDevHUD, toggleDevHUD } from "../ui/devhud.js";
 
 
 
@@ -107,6 +108,12 @@ window.addEventListener("keyup", (e) => {
   state.keys.delete(e.key.toLowerCase());
 });
 
+window.addEventListener("keydown", (e) => {
+  if (e.repeat) return;
+  if (e.key.toLowerCase() === "p") toggleDevHUD(state);
+});
+
+
 function startGame() {
   // base state
   state.time = 0;
@@ -143,7 +150,7 @@ function startGame() {
 // ---- Init ----
 startGame();
 initDrill(state);
-
+initDevHUD(state);
 
 
 // ---- Update ----
@@ -316,7 +323,13 @@ function loop(now) {
   if (!state.gameOver && !state.paused) {
     update(dt);
   }
+
   draw();
+
+  // Dev HUD: update numbers, then draw the tiny box (top-right)
+  updateDevHUD(state, state.dt);
+  drawDevHUD(ctx, state);
+
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
