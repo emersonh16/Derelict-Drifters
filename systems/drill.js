@@ -3,13 +3,17 @@
 export function initDrill(state, opts = {}) {
   const r = state.player?.r ?? 18;
   state.drill = {
-    length: opts.length ?? 55,                   // short & stout
-    width:  opts.width  ?? Math.min(40, r * 1.8), // chunky base
+    length: opts.length ?? 55,                       // short & stout
+    width:  opts.width  ?? Math.min(40, r * 1.8),    // chunky base
     offset: opts.offset ?? 0,
-    fill:   opts.fill   ?? "#9ca3af",             // gray fill
-    stroke: opts.stroke ?? "#4b5563",             // dark gray outline
-    capFill:   opts.capFill   ?? "#6b7280",       // base cap fill
-    capStroke: opts.capStroke ?? "#374151",       // base cap outline
+
+    // Damage per second (tune this!)
+    dps:    opts.dps    ?? 700,
+
+    fill:   opts.fill   ?? "#9ca3af",                // gray fill
+    stroke: opts.stroke ?? "#4b5563",                // dark gray outline
+    capFill:   opts.capFill   ?? "#6b7280",          // base cap fill
+    capStroke: opts.capStroke ?? "#374151",          // base cap outline
     playerRadius: r
   };
 }
@@ -69,12 +73,16 @@ export function drawDrill(ctx, state, cx, cy) {
   ctx.restore();
 }
 
+/**
+ * Returns the drill triangle in WORLD coordinates + its AABB.
+ * Used for obstacle carving and enemy damage checks.
+ */
 export function getDrillTriangleWorld(state) {
   const { length, width, offset, playerRadius } = state.drill;
 
-  // Hitbox tuning
-  const hitboxLengthMult = 1.15; // 1.0 = exact visual length, >1 = longer reach
-  const hitboxWidthMult  = 1.35; // 1.0 = exact visual width, >1 = wider hit area
+  // Hitbox tuning (visual helpers)
+  const hitboxLengthMult = 1.15; // >1 = longer reach than visual
+  const hitboxWidthMult  = 1.35; // >1 = wider than visual
 
   const halfW = (width * hitboxWidthMult) * 0.5;
 
@@ -95,9 +103,9 @@ export function getDrillTriangleWorld(state) {
   const tipY  = py + Math.sin(ang) * (safeOffset + length * hitboxLengthMult);
 
   const nx = -Math.sin(ang), ny = Math.cos(ang);
-  const a = { x: baseX + nx * halfW, y: baseY + ny * halfW };
-  const b = { x: tipX, y: tipY };
-  const c = { x: baseX - nx * halfW, y: baseY - ny * halfW };
+  const a = { x: baseX + nx * halfW, y: baseY + ny * halfW }; // left base
+  const b = { x: tipX, y: tipY };                              // tip
+  const c = { x: baseX - nx * halfW, y: baseY - ny * halfW };  // right base
 
   return {
     a, b, c,
@@ -110,6 +118,9 @@ export function getDrillTriangleWorld(state) {
   };
 }
 
+/**
+ * Carve obstacles inside the drill triangle (optional, already used).
+ */
 export function carveObstaclesWithDrillTri(state, tri, dt, pad = 2) {
   const t = state.miasma.tile;
   const cols = state.miasma.cols;
@@ -140,7 +151,7 @@ export function carveObstaclesWithDrillTri(state, tri, dt, pad = 2) {
   }
 }
 
-// Helper: point-in-triangle test
+// Helper: point-in-triangle test (same math used in enemies.js)
 function pointInTriangle(p, a, b, c) {
   const areaOrig = Math.abs((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y));
   const area1 = Math.abs((a.x - p.x) * (b.y - p.y) - (b.x - p.x) * (a.y - p.y));

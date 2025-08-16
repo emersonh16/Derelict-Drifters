@@ -1,5 +1,7 @@
+// systems/enemies.js
 import { spawnPickup } from "./pickups.js";
 import { collideWithObstacles } from "./world.js";
+import { getDrillTriangleWorld } from "./drill.js";
 
 export function initEnemies(state, opts = {}) {
   const cols = state.miasma.cols ?? (state.miasma.halfCols * 2);
@@ -98,7 +100,6 @@ function spawnEnemies(state, count = 1, minDistFromPlayer = 150) {
   }
 }
 
-
 export function spawnInitialEnemies(state, count = 40) {
   spawnEnemies(state, count, state.enemies.safeDistInitial);
 }
@@ -108,6 +109,11 @@ export function updateEnemies(state, dt) {
   const list = cfg.list;
   const px = state.camera.x, py = state.camera.y;
   const playerR = state.player?.r ?? 18;
+
+  // Compute the drill triangle once per frame (only if drill is selected)
+  const tri = (state.activeWeapon === "drill" && state.drill)
+    ? getDrillTriangleWorld(state)
+    : null;
 
   cfg.spawnTimer += dt;
   if (list.length < cfg.max && cfg.spawnTimer >= cfg.spawnEvery) {
@@ -146,14 +152,35 @@ export function updateEnemies(state, dt) {
       m.y = Math.max(state.world.minY + m.r, Math.min(state.world.maxY - m.r, m.y));
     }
 
+    // Contact damage (tanks/normal)
     if (m.type !== "fast" && dist <= m.r + playerR) {
       state.health -= cfg.contactDPS * dt;
       state.damageFlash = 0.2;
     }
 
+    // Drill damage if enemy overlaps the drill triangle
+    if (tri) {
+      // quick AABB reject
+      if (
+        m.x >= tri.aabb.minX && m.x <= tri.aabb.maxX &&
+        m.y >= tri.aabb.minY && m.y <= tri.aabb.maxY
+      ) {
+        if (pointInTriangle({ x: m.x, y: m.y }, tri.a, tri.b, tri.c)) {
+          const dps = state.drill.dps ?? 180;
+          m.hp -= dps * dt;
+          m.flash = cfg.flashTime;
+          if (m.hp < 0) m.hp = 0;
+        }
+      }
+    }
+
+    // Laser damage (existing)
     applyLaserDamage(state, m, dt);
+
+    // Flash decay
     m.flash = Math.max(0, m.flash - dt);
 
+    // Death & drops
     if (m.hp <= 0) {
       if (m.type === "fast") {
         for (let k = 0; k < 5; k++) {
@@ -283,12 +310,11 @@ function applyLaserDamage(state, m, dt) {
   const tx = ox + Math.cos(b.angle) * b.range;
   const ty = oy + Math.sin(b.angle) * b.range;
 
-const thickness = 20; // visual beam width in px
-const d2 = distPointToSegmentSq(m.x, m.y, ox, oy, tx, ty);
-// enemy circle (radius m.r) vs thick beam (radius thickness/2)
-const combined = m.r + thickness * 0.5;
-if (d2 <= combined * combined) {
-
+  const thickness = 20; // visual beam width in px
+  const d2 = distPointToSegmentSq(m.x, m.y, ox, oy, tx, ty);
+  // enemy circle (radius m.r) vs thick beam (radius thickness/2)
+  const combined = m.r + thickness * 0.5;
+  if (d2 <= combined * combined) {
     m.hp -= state.enemies.laserDPS * dt;
     m.flash = state.enemies.flashTime;
   }
@@ -307,4 +333,13 @@ function distPointToSegmentSq(px, py, x1, y1, x2, y2) {
 
 function randInt(min, max) {
   return (min + Math.floor(Math.random() * (max - min + 1)));
+}
+
+// Used by drill damage AABB pass
+function pointInTriangle(p, a, b, c) {
+  const areaOrig = Math.abs((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y));
+  const area1 = Math.abs((a.x - p.x) * (b.y - p.y) - (b.x - p.x) * (a.y - p.y));
+  const area2 = Math.abs((b.x - p.x) * (c.y - p.y) - (c.x - p.x) * (b.y - p.y));
+  const area3 = Math.abs((c.x - p.x) * (a.y - p.y) - (a.x - p.x) * (c.y - p.y));
+  return Math.abs(area1 + area2 + area3 - areaOrig) < 0.01;
 }
