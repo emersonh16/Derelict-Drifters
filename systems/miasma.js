@@ -26,13 +26,12 @@ export function initMiasma(state, opts = {}) {
     viewW: 0,
     viewH: 0,
 
-    // line config
-    bandThickness: opts.bandThickness ?? 8, // in rows
-    bandSpacing: opts.bandSpacing ?? 20,    // gap between bands
+    // line config (thicker bands with wider gaps)
+    bandThickness: opts.bandThickness ?? 24, // in rows (3x old default)
+    bandSpacing: opts.bandSpacing ?? 60,    // gap between bands (3x old default)
 
-    // --- NEW: beam clears persist ---
-    clearDuration: opts.clearDuration ?? 1.2,   // seconds to stay clear
-    clearTTL: new Float32Array(size).fill(0),   // per-tile timer
+    // track cleared tiles; Infinity means cleared forever
+    clearTTL: new Float32Array(size).fill(0),
   };
 }
 
@@ -51,8 +50,8 @@ export function updateMiasma(state, dt) {
     for (let col = 0; col < s.cols; col++) {
       const idx = row * s.cols + col;
 
-        // decay any previous clears
-      if (s.clearTTL[idx] > 0) {
+      // decay any temporary clears (Infinity stays Infinity)
+      if (s.clearTTL[idx] > 0 && s.clearTTL[idx] !== Infinity) {
         s.clearTTL[idx] = Math.max(0, s.clearTTL[idx] - dt);
       }
 
@@ -93,32 +92,50 @@ export function drawMiasma(state, ctx) {
   ctx.restore();
 }
 
-// ---- Beam clearing still works (overrides bands locally) ----
-// ---- Beam clearing works with beam geometry from getBeamGeom(state, cx, cy)
+// ---- Beam clearing (bubble, cone, or laser) ----
+// Uses beam geometry from getBeamGeom(state, cx, cy) to permanently clear tiles.
 export function clearWithBeam(state, geom) {
   const s = state.miasma;
-  if (!s || !geom) return;
-
-  // beam geom is screen-space; normalize possible shapes
-  const poly = normalizeBeamPolygon(geom);
-  if (!poly || poly.length < 3) return;
+  if (!s || !geom || geom.mode === 'none') return;
 
   // need screen center to convert world->screen; drawMiasma stored it
   const cx = (s.viewW ?? 0) / 2;
   const cy = (s.viewH ?? 0) / 2;
 
+  // precompute squared ranges for cheap checks
+  const radius2 = geom.radius ? geom.radius * geom.radius : 0;
+  const range2 = geom.range ? geom.range * geom.range : 0;
+
   for (let row = 0; row < s.rows; row++) {
     for (let col = 0; col < s.cols; col++) {
       const idx = row * s.cols + col;
-      if (s.grid[idx] === 0) continue;
+      if (s.grid[idx] === 0) continue; // already clear
 
       // world → screen (center of the tile)
       const wx = (col - s.halfCols + 0.5) * s.tile - state.camera.x + cx;
       const wy = (row - s.halfRows + 0.5) * s.tile - state.camera.y + cy;
+      const dx = wx - cx;
+      const dy = wy - cy;
 
-        if (pointInPolygon(wx, wy, poly)) {
-        s.clearTTL[idx] = s.clearDuration;  // keep clear for a while
-        s.grid[idx] = 0;                    // clear immediately this frame
+      let hit = false;
+
+      if (geom.mode === 'bubble') {
+        hit = (dx * dx + dy * dy) <= radius2;
+      } else if (geom.mode === 'cone' || geom.mode === 'laser') {
+        const dist2 = dx * dx + dy * dy;
+        if (dist2 <= range2) {
+          const ang = Math.atan2(dy, dx);
+          const diff = Math.atan2(Math.sin(ang - geom.angle), Math.cos(ang - geom.angle));
+          if (Math.abs(diff) <= geom.halfArc) hit = true;
+        }
+      } else {
+        const poly = normalizeBeamPolygon(geom);
+        if (poly && poly.length >= 3 && pointInPolygon(wx, wy, poly)) hit = true;
+      }
+
+      if (hit) {
+        s.clearTTL[idx] = Infinity; // cleared permanently
+        s.grid[idx] = 0;
       }
 
     }

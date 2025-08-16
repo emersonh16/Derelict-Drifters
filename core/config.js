@@ -53,7 +53,11 @@ export const config = {
     laserFanCount: 3,
     laserFanMinDeg: 0.25,
 
-    dps: 35
+    dps: 35,
+
+    // band pattern
+    bandThickness: 24,
+    bandSpacing: 60
   },
 
   enemies: {
