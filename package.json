@@ -1,0 +1,24 @@
+{
+  "name": "derelict-drifters",
+  "version": "1.0.0",
+  "description": "Prototype roguelike about scavengers in the miasma",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/emersonh16/Derelict-Drifters.git"
+  },
+  "keywords": [],
+  "author": "Emerson",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/emersonh16/Derelict-Drifters/issues"
+  },
+  "homepage": "https://github.com/emersonh16/Derelict-Drifters#readme",
+  "devDependencies": {
+    "vite": "^7.1.2"
+  }
+}
