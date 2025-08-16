@@ -1,26 +1,31 @@
 // core/game.js
 import { config } from "../core/config.js";
-import { initBeam, drawBeam, onWheelAdjust, getBeamGeom } from "../systems/beam.js";
+import { initBeam, drawBeam, onWheelAdjust, getBeamGeom, getBeamPolygon } from "../systems/beam.js";
 import {
-  initMiasma, updateMiasma, drawMiasma, clearWithBeam, worldToIdx, isFog, isDenseFogAt} from "../systems/miasma.js";
+  initMiasma, updateMiasma, drawMiasma, clearWithBeam,
+  worldToIdx, isFog, isDenseFogAt
+} from "../systems/miasma.js";
 
 import { initEnemies, spawnInitialEnemies, updateEnemies, drawEnemies } from "../systems/enemies.js";
 import { initHUD, updateHUD } from "../ui/hud.js";
 import { updatePickups, drawPickups } from "../systems/pickups.js";
-import { initWorld, clampToWorld, drawWorldBorder, drawObstacles, collideWithObstacles, carveObstaclesWithDrillTri } from "../systems/world.js";
+import {
+  initWorld, clampToWorld, drawWorldBorder,
+  drawObstacles, collideWithObstacles, carveObstaclesWithDrillTri
+} from "../systems/world.js";
 import { initDrill, drawDrill, getDrillTriangleWorld } from "../systems/drill.js";
 import { initDevHUD, updateDevHUD, drawDevHUD, toggleDevHUD } from "../ui/devhud.js";
 
-
-
-
+// ---------------------------------------------------------------------------
+// Canvas / State
+// ---------------------------------------------------------------------------
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d", { alpha: false });
 
 const state = {
   time: 0, dt: 0,
-  mouse: { x: 0, y: 0 },        // aim used for drawing/beam logic
-  pendingMouse: { x: 0, y: 0 }, // tracks mouse while paused
+  mouse: { x: 0, y: 0 },
+  pendingMouse: { x: 0, y: 0 },
   camera: { x: 0, y: 0 },
   player: { r: 18 },
   keys: new Set(),
@@ -28,17 +33,19 @@ const state = {
   maxHealth: 100,
   gameOver: false,
   scrap: 0,
-  pickups: [], // {x, y, type, r}
+  pickups: [],
   damageFlash: 0,
   paused: false,
   win: false,
   maxScrap: config.game.winScrap,
-  laserEnergy: config.game.maxLaserEnergy,   // starts full
+  laserEnergy: config.game.maxLaserEnergy,
   maxLaserEnergy: config.game.maxLaserEnergy,
-  activeWeapon: "beam",   // "beam" | "drill"
+  activeWeapon: "beam", // "beam" | "drill"
 };
 
-// ---- Resize ----
+// ---------------------------------------------------------------------------
+// Resize
+// ---------------------------------------------------------------------------
 function resize() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
@@ -50,7 +57,9 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
-// ---- Input ----
+// ---------------------------------------------------------------------------
+// Input
+// ---------------------------------------------------------------------------
 canvas.addEventListener("mousemove", (e) => {
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
@@ -71,7 +80,6 @@ canvas.addEventListener("wheel", (e) => {
   e.preventDefault();
 }, { passive: false });
 
-// Restart (R)
 window.addEventListener("keydown", (e) => {
   if (e.key.toLowerCase() === "r" && state.gameOver) {
     startGame();
@@ -84,8 +92,6 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "2") state.activeWeapon = "drill";
 });
 
-
-
 function togglePause() {
   state.paused = !state.paused;
   if (!state.paused) {
@@ -93,7 +99,6 @@ function togglePause() {
     state.mouse.y = state.pendingMouse.y;
   }
 }
-
 window.addEventListener("keydown", (e) => {
   if (e.code === "Space") {
     e.preventDefault();
@@ -102,19 +107,18 @@ window.addEventListener("keydown", (e) => {
   }
   state.keys.add(e.key.toLowerCase());
 });
-
 window.addEventListener("keyup", (e) => {
   state.keys.delete(e.key.toLowerCase());
 });
-
 window.addEventListener("keydown", (e) => {
   if (e.repeat) return;
   if (e.key.toLowerCase() === "p") toggleDevHUD(state);
 });
 
-
+// ---------------------------------------------------------------------------
+// Init + Start
+// ---------------------------------------------------------------------------
 function startGame() {
-  // base state
   state.time = 0;
   state.dt = 0;
   state.keys.clear();
@@ -123,76 +127,61 @@ function startGame() {
   state.win = false;
   state.damageFlash = 0;
 
-  // player / run
   state.health = state.maxHealth;
   state.scrap = 0;
   state.pickups.length = 0;
   state.camera.x = 0;
   state.camera.y = 0;
 
-  // keep mouse centered (like a page refresh)
   state.mouse.x = canvas.width / 2;
   state.mouse.y = canvas.height / 2;
   state.pendingMouse.x = state.mouse.x;
   state.pendingMouse.y = state.mouse.y;
 
-  // world + systems (same order as first load)
-  initMiasma(state, config.miasma);                 // brand-new fog grid
-  initWorld(state, config.world);                   // world depends on miasma size
+  initMiasma(state, config.miasma);
+  initWorld(state, config.world);
   initBeam(state, config.beam);
   initEnemies(state, config.enemies);
   spawnInitialEnemies(state, config.enemies.max);
   initHUD(state, config.hud);
 }
 
-
-// ---- Init ----
 startGame();
 initDrill(state);
 initDevHUD(state);
 
-
-// ---- Update ----
+// ---------------------------------------------------------------------------
+// Update
+// ---------------------------------------------------------------------------
 function update(dt) {
   state.time += dt;
 
   // movement
   let vx = 0, vy = 0;
-  if (state.keys.has('w')) vy -= 1;
-  if (state.keys.has('s')) vy += 1;
-  if (state.keys.has('a')) vx -= 1;
-  if (state.keys.has('d')) vx += 1;
+  if (state.keys.has("w")) vy -= 1;
+  if (state.keys.has("s")) vy += 1;
+  if (state.keys.has("a")) vx -= 1;
+  if (state.keys.has("d")) vx += 1;
 
   if (vx || vy) {
     const len = Math.hypot(vx, vy) || 1;
-    vx /= len; 
-    vy /= len;
+    vx /= len; vy /= len;
     const speed = 240;
     state.camera.x += vx * speed * dt;
     state.camera.y += vy * speed * dt;
-
-    // Prevent player from passing through obstacles
     collideWithObstacles(state, state.camera, state.player.r);
   }
 
   clampToWorld(state);
 
-
-// --- Drill carving using triangle hitbox ---
-if (state.activeWeapon === "drill" && state.drill) {
-  const tri = getDrillTriangleWorld(state);
-  carveObstaclesWithDrillTri(state, tri, dt, 2); // pad=2 for small buffer
-}
-
-
-
+  if (state.activeWeapon === "drill" && state.drill) {
+    const tri = getDrillTriangleWorld(state);
+    carveObstaclesWithDrillTri(state, tri, dt, 2);
+  }
 
   updateMiasma(state, dt);
   updateEnemies(state, dt);
   updatePickups(state, dt);
-
-
-
 
   // Win condition
   if (!state.gameOver && state.scrap >= state.maxScrap) {
@@ -200,10 +189,9 @@ if (state.activeWeapon === "drill" && state.drill) {
     state.gameOver = true;
   }
 
-  // Miasma damage (binary via isDenseFogAt)
+  // Fog damage
   let inFog = false;
   const step = state.miasma.tile * 0.5;
-
   for (let dy = -state.player.r; dy <= state.player.r && !inFog; dy += step) {
     for (let dx = -state.player.r; dx <= state.player.r; dx += step) {
       if (dx*dx + dy*dy > state.player.r * state.player.r) continue;
@@ -213,30 +201,25 @@ if (state.activeWeapon === "drill" && state.drill) {
       }
     }
   }
-
   if (inFog) {
     state.health -= state.miasma.dps * dt;
-    state.damageFlash = 0.2; // trigger red flash
+    state.damageFlash = 0.2;
     if (state.health < 0) state.health = 0;
   }
 
-
-
   state.damageFlash = Math.max(0, state.damageFlash - dt);
-
   if (state.health <= 0 && !state.gameOver) {
     state.health = 0;
     state.gameOver = true;
   }
 
-  // --- Laser energy drain/recharge ---
+  // Laser energy drain/recharge
   const beam = state.beam;
   if (state.activeWeapon === "beam" && beam.mode === "laser") {
     state.laserEnergy -= config.game.laserDrainRate * dt;
     if (state.laserEnergy <= 0) {
       state.laserEnergy = 0;
-      // auto shut off laser if empty
-      beam.t = beam.tConeEnd - 0.01; // forces it back to cone mode
+      beam.t = beam.tConeEnd - 0.01;
       getBeamGeom(state, canvas.width / 2, canvas.height / 2);
     }
   } else {
@@ -246,11 +229,12 @@ if (state.activeWeapon === "drill" && state.drill) {
     );
   }
 
-
   updateHUD(state);
 }
 
-// ---- Draw ----
+// ---------------------------------------------------------------------------
+// Draw
+// ---------------------------------------------------------------------------
 function draw() {
   const w = canvas.width, h = canvas.height;
   const cx = w / 2, cy = h / 2;
@@ -258,30 +242,30 @@ function draw() {
   ctx.fillStyle = "#0c0b10";
   ctx.fillRect(0, 0, w, h);
 
-if (state.activeWeapon === "beam") {
-  const geom = getBeamGeom(state, cx, cy);     // <- get beam geometry
-  if (state.miasma) {                          // store viewport for conversion
-    state.miasma.viewW = canvas.width;
-    state.miasma.viewH = canvas.height;
+  // --- beam clears fog ---
+  if (state.activeWeapon === "beam") {
+    getBeamGeom(state, cx, cy); // update beam params
+    const poly = getBeamPolygon(state, cx, cy); // build polygon
+    if (state.miasma) {
+      state.miasma.viewW = w;
+      state.miasma.viewH = h;
+    }
+    if (!state.paused && !state.gameOver && poly) {
+      clearWithBeam(state, poly);
+    }
   }
-  if (!state.paused && !state.gameOver) {
-    clearWithBeam(state, geom);                // <- pass geometry, not cx,cy
-  }
-}
 
-
-
-  drawObstacles(ctx, state, cx, cy); // draw terrain first
+  drawObstacles(ctx, state, cx, cy);
   drawEnemies(ctx, state, cx, cy);
   drawPickups(ctx, state, cx, cy);
   drawMiasma(state, ctx);
   drawWorldBorder(ctx, state, cx, cy);
-if (state.activeWeapon === "beam") {
-  drawBeam(ctx, state, cx, cy);
-} else if (state.activeWeapon === "drill") {
-  drawDrill(ctx, state, cx, cy);
-}
 
+  if (state.activeWeapon === "beam") {
+    drawBeam(ctx, state, cx, cy);
+  } else if (state.activeWeapon === "drill") {
+    drawDrill(ctx, state, cx, cy);
+  }
 
   ctx.fillStyle = "#9a3b31";
   ctx.beginPath();
@@ -293,28 +277,23 @@ if (state.activeWeapon === "beam") {
     ctx.fillRect(0, 0, w, h);
   }
 
-  // paused overlay
   if (state.paused && !state.gameOver) {
     ctx.fillStyle = "rgba(0,0,0,0.5)";
     ctx.fillRect(0, 0, w, h);
-
     ctx.fillStyle = "white";
     ctx.font = "bold 32px sans-serif";
     ctx.textAlign = "center";
     ctx.fillText("PAUSED — press Space", w / 2, 64);
   }
 
-  // game over overlay
   if (state.gameOver) {
     ctx.fillStyle = "rgba(0,0,0,0.6)";
     ctx.fillRect(0, 0, w, h);
-
     ctx.fillStyle = "white";
     ctx.font = "bold 64px sans-serif";
     ctx.textAlign = "center";
     const title = state.win ? "YOU WIN" : "GAME OVER";
     ctx.fillText(title, w / 2, h / 2);
-
     if (!state.win) {
       ctx.font = "24px sans-serif";
       ctx.fillText("Press R to Restart", w / 2, h / 2 + 50);
@@ -322,7 +301,9 @@ if (state.activeWeapon === "beam") {
   }
 }
 
-// ---- Main Loop ----
+// ---------------------------------------------------------------------------
+// Main Loop
+// ---------------------------------------------------------------------------
 let last = performance.now();
 function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
@@ -335,7 +316,6 @@ function loop(now) {
 
   draw();
 
-  // Dev HUD: update numbers, then draw the tiny box (top-right)
   updateDevHUD(state, state.dt);
   drawDevHUD(ctx, state);
 
