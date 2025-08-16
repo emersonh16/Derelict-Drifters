@@ -1,16 +1,16 @@
 // core/game.js
-import { config } from "../core/config.js";
-import { initBeam, drawBeam, onWheelAdjust, getBeamGeom } from "../systems/beam.js";
+import { config } from "./config.js";
 import {
-  initMiasma, updateMiasma, drawMiasma, clearWithBeam,
-  worldToIdx, isFog
-} from "../systems/miasma.js";
-import { initEnemies, spawnInitialEnemies, updateEnemies, drawEnemies } from "../systems/enemies.js";
-import { initHUD, updateHUD } from "../ui/hud.js";
-import { updatePickups, drawPickups } from "../systems/pickups.js";
-import { initWorld, clampToWorld, drawWorldBorder, drawObstacles, collideWithObstacles, carveObstaclesWithDrillTri } from "../systems/world.js";
-import { initDrill, drawDrill, getDrillTriangleWorld } from "../systems/drill.js";
-import { initDevHUD, updateDevHUD, drawDevHUD, toggleDevHUD } from "../ui/devhud.js";
+  initBeam, drawBeam, onWheelAdjust, getBeamGeom,
+  initMiasma, updateMiasma, drawMiasma, clearWithBeam, worldToIdx, isFog,
+  initEnemies, spawnInitialEnemies, updateEnemies, drawEnemies, updatePickups, drawPickups,
+  initWorld, clampToWorld, drawWorldBorder, drawObstacles, collideWithObstacles, carveObstaclesWithDrillTri,
+  initDrill, drawDrill, getDrillTriangleWorld
+} from "../systems/index.js";
+import {
+  initHUD, updateHUD,
+  initDevHUD, updateDevHUD, drawDevHUD, toggleDevHUD
+} from "../ui/index.js";
 
 
 
