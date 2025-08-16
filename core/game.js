@@ -72,21 +72,6 @@ canvas.addEventListener("wheel", (e) => {
   e.preventDefault();
 }, { passive: false });
 
-// Restart (R)
-window.addEventListener("keydown", (e) => {
-  if (e.key.toLowerCase() === "r" && state.gameOver) {
-    startGame();
-  }
-});
-
-window.addEventListener("keydown", (e) => {
-  if (e.repeat) return;
-  if (e.key === "1") state.activeWeapon = "beam";
-  if (e.key === "2") state.activeWeapon = "drill";
-});
-
-
-
 function togglePause() {
   state.paused = !state.paused;
   if (!state.paused) {
@@ -96,21 +81,33 @@ function togglePause() {
 }
 
 window.addEventListener("keydown", (e) => {
-  if (e.code === "Space") {
-    e.preventDefault();
-    if (!state.gameOver) togglePause();
-    return;
+  const key = e.key.toLowerCase();
+
+  switch (key) {
+    case "r":
+      if (state.gameOver) startGame();
+      break;
+    case "1":
+      if (!e.repeat) state.activeWeapon = "beam";
+      break;
+    case "2":
+      if (!e.repeat) state.activeWeapon = "drill";
+      break;
+    case "p":
+      if (!e.repeat) toggleDevHUD(state);
+      break;
+    default:
+      if (e.code === "Space") {
+        e.preventDefault();
+        if (!state.gameOver) togglePause();
+      } else {
+        state.keys.add(key);
+      }
   }
-  state.keys.add(e.key.toLowerCase());
 });
 
 window.addEventListener("keyup", (e) => {
   state.keys.delete(e.key.toLowerCase());
-});
-
-window.addEventListener("keydown", (e) => {
-  if (e.repeat) return;
-  if (e.key.toLowerCase() === "p") toggleDevHUD(state);
 });
 
 
