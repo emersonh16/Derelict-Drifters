@@ -1,242 +1,178 @@
+// systems/miasma.js
+// Weather-like rolling fog banks driven by wind.
 
- // systems/miasma.js
-// Big miasma grid with crystal regrowth + beam clearing.
-// Laser uses a thick world-space ray (with a tiny fan) so it cleanly sweeps.
+// ---- Public API -----------------------------------------------------------
 
 export function initMiasma(state, opts = {}) {
-  const halfCols = Math.floor((opts.cols ?? 400) / 2);
-  const halfRows = Math.floor((opts.rows ?? 400) / 2);
-  const cols = halfCols * 2;
-  const rows = halfRows * 2;
-  const size = cols * rows;
+  // World dimensions kept for compatibility with previous grid system
+  const cols = opts.cols ?? 400;
+  const rows = opts.rows ?? 400;
+  const tile = opts.tile ?? 14;
+  const halfCols = Math.floor(cols / 2);
+  const halfRows = Math.floor(rows / 2);
 
   state.miasma = {
-    // grid
-    tile: opts.tile ?? 14,
-    halfCols, halfRows,
-    cols, rows,
-    stride: cols,
-    size,
+    // world metrics (used by other systems)
+    tile, cols, rows, halfCols, halfRows,
 
-    // double buffer (no per-tick allocations)
-    strength: new Uint8Array(size).fill(1),       // 1 = fog, 0 = clear
-    strengthNext: new Uint8Array(size).fill(1),
+    // damage when in dense fog
+    dps: opts.dps ?? 35,
 
-    // regrowth
-    regrowDelay: opts.regrowDelay ?? 1.0,
-    baseChance:  opts.baseChance  ?? 0.20,
-    tickHz:      opts.tickHz      ?? 8,
-    lastCleared: new Float32Array(size).fill(-1e9),
-    _accum: 0,
+    // view size (updated each draw)
+    viewW: 0,
+    viewH: 0,
 
-    // laser sweep tunables (on miasma for perf/caching)
-    laserMinThicknessTiles: opts.laserMinThicknessTiles ?? 2.0,
-    laserFanCount:          opts.laserFanCount          ?? 3,
-    laserFanMinDeg:         opts.laserFanMinDeg         ?? 0.25,
+    // wind
+    windAngle: Math.random() * Math.PI * 2,
+    windSpeed: opts.windSpeed ?? 20,
+    _windTimer: randRange(10, 30),
 
-    // NEW: damage per second when the player is in fog
-    dps: opts.dps ?? 35
+    // fog banks
+    banks: [],
+    bankMinRadius: opts.bankMinRadius ?? 200,
+    bankMaxRadius: opts.bankMaxRadius ?? 400,
+    baseAlpha: opts.baseAlpha ?? 0.4,
+    denseThreshold: opts.denseThreshold ?? 0.6,
 
+    // initial + growth hooks
+    baseBankCount: opts.bankCount ?? 8,
+    bankCountGrowth: opts.bankCountGrowth ?? 0, // banks per second (hook)
+    spawnInterval: opts.spawnInterval ?? 0,     // hook for future spawn tuning
+    spawnIntervalGrowth: opts.spawnIntervalGrowth ?? 0, // hook
+
+    age: 0,
   };
+
+  // spawn initial banks upwind/off-screen
+  const s = state.miasma;
+  for (let i = 0; i < s.baseBankCount; i++) {
+    spawnBank(s, state, true);
+  }
 }
 
 export function updateMiasma(state, dt) {
   const s = state.miasma; if (!s) return;
-  s._accum += dt;
-  const step = 1 / s.tickHz;
-  while (s._accum >= step) {
-    s._accum -= step;
-    regrowStep(state);
+  s.age += dt;
+
+  // ---- Wind direction changes ----
+  s._windTimer -= dt;
+  if (s._windTimer <= 0) {
+    s._windTimer = randRange(10, 30);
+    const roll = Math.random();
+    let delta;
+    if (roll < 0.80) {
+      delta = randSign() * degToRad(randRange(20, 40));
+    } else if (roll < 0.95) {
+      delta = randSign() * degToRad(90);
+    } else {
+      delta = degToRad(180);
+    }
+    s.windAngle = normalizeAngle(s.windAngle + delta);
+  }
+
+  // ---- Move banks ----
+  const vx = Math.cos(s.windAngle) * s.windSpeed;
+  const vy = Math.sin(s.windAngle) * s.windSpeed;
+
+  const w = s.viewW;
+  const h = s.viewH;
+  const halfDiag = Math.sqrt(w * w + h * h) / 2;
+
+  for (let i = s.banks.length - 1; i >= 0; i--) {
+    const b = s.banks[i];
+    b.x += vx * dt;
+    b.y += vy * dt;
+
+    const dPar = (b.x - state.camera.x) * Math.cos(s.windAngle) +
+                 (b.y - state.camera.y) * Math.sin(s.windAngle);
+    const limit = halfDiag + Math.max(b.rx, b.ry);
+    if (dPar > limit) {
+      s.banks.splice(i, 1);
+      spawnBank(s, state, true);
+    }
+  }
+
+  // ---- Increase bank count over time (hook) ----
+  const desired = Math.floor(s.baseBankCount + s.bankCountGrowth * s.age);
+  while (s.banks.length < desired) {
+    spawnBank(s, state, true);
   }
 }
 
-export function drawMiasma(ctx, state, cx, cy, w, h) {
+export function drawMiasma(state, ctx) {
   const s = state.miasma; if (!s) return;
-  const t = s.tile;
-
-  // visible world bounds
-  const leftW   = state.camera.x - w / 2;
-  const rightW  = state.camera.x + w / 2;
-  const topW    = state.camera.y - h / 2;
-  const bottomW = state.camera.y + h / 2;
-
-  // clamp to grid (grid coords centered on 0,0)
-  const minGX = Math.max(-s.halfCols, Math.floor(leftW  / t) - 1);
-  const maxGX = Math.min( s.halfCols, Math.ceil (rightW / t) + 1);
-  const minGY = Math.max(-s.halfRows, Math.floor(topW   / t) - 1);
-  const maxGY = Math.min( s.halfRows, Math.ceil (bottomW/ t) + 1);
+  const w = ctx.canvas.width;
+  const h = ctx.canvas.height;
+  const cx = w / 2, cy = h / 2;
+  s.viewW = w;
+  s.viewH = h;
 
   ctx.save();
   ctx.globalCompositeOperation = 'source-over';
-  ctx.fillStyle = 'rgba(120, 60, 160, 0.50)';
-  ctx.beginPath();
 
-  // compute first screen row start, then increment by tile size
-  let sy = Math.floor(minGY * t - state.camera.y + cy);
-  for (let gy = minGY; gy < maxGY; gy++, sy += t) {
-    let sx = Math.floor(minGX * t - state.camera.x + cx);
-    for (let gx = minGX; gx < maxGX; gx++, sx += t) {
-      if (s.strength[idx(s, gx, gy)] === 1) {
-        ctx.rect(sx, sy, t, t);
-      }
-    }
+  for (const b of s.banks) {
+    const x = b.x - state.camera.x + cx;
+    const y = b.y - state.camera.y + cy;
+    const maxR = Math.max(b.rx, b.ry);
+    const grad = ctx.createRadialGradient(x, y, 0, x, y, maxR);
+    grad.addColorStop(0, `rgba(120,60,160,${b.alpha})`);
+    grad.addColorStop(1, 'rgba(120,60,160,0)');
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.ellipse(x, y, b.rx, b.ry, 0, 0, Math.PI * 2);
+    ctx.fill();
   }
 
-  ctx.fill();
   ctx.restore();
 }
 
-export function clearWithBeam(state, cx, cy) {
-  const s = state.miasma; const b = state.beam;
-  if (!s || !b || b.mode === 'none') return;
+// ---- Compatibility No-Ops -----------------------------------------------
 
-  const t = s.tile;
-  const playerWX = state.camera.x;
-  const playerWY = state.camera.y;
-  const now = state.time;
+export function clearWithBeam(state, cx, cy) {}
+export function worldToIdx(miasma, wx, wy) { return -1; }
+export function isFog(miasma, idx) { return false; }
 
-  // -------- LASER: carve a thick, continuous ray (plus a tiny fan) --------
-  if (b.mode === 'laser') {
-    const core = (b.laserCoreWidth ?? 8);
-    const halo = core * (b.laserOutlineMult ?? 2.0);
-    const minThick = s.laserMinThicknessTiles * t;
-    const thickness = Math.max(minThick, core + halo);
+// ---- Density Query -------------------------------------------------------
 
-    const fan = Math.max(1, s.laserFanCount | 0);
-    const dAng = Math.max(toRad(s.laserFanMinDeg), b.halfArc * 0.5);
-    const start = b.angle - dAng * ((fan - 1) * 0.5);
-
-    for (let i = 0; i < fan; i++) {
-      const ang = start + i * dAng;
-      rayStampWorld(s, state, playerWX, playerWY, ang, b.range + t, thickness, now);
-    }
-    return;
-  }
-
-  // -------- BUBBLE & CONE: sector test on tile centers (dot product, no atan2) --------
-  const maxR2 = (b.range + t) ** 2;
-
-  const minGX = Math.floor((playerWX - b.range) / t);
-  const maxGX = Math.ceil ((playerWX + b.range) / t);
-  const minGY = Math.floor((playerWY - b.range) / t);
-  const maxGY = Math.ceil ((playerWY + b.range) / t);
-
-  // cache beam direction + cosine threshold
-  const bx = Math.cos(b.angle);
-  const by = Math.sin(b.angle);
-  const cosThresh = Math.cos(b.halfArc);
-
-  for (let gy = Math.max(minGY, -s.halfRows); gy <= Math.min(maxGY, s.halfRows - 1); gy++) {
-    for (let gx = Math.max(minGX, -s.halfCols); gx <= Math.min(maxGX, s.halfCols - 1); gx++) {
-      const wx = gx * t + t * 0.5;
-      const wy = gy * t + t * 0.5;
-      const dx = wx - playerWX, dy = wy - playerWY;
-      const r2 = dx*dx + dy*dy;
-      if (r2 > maxR2) continue;
-
-      if (b.mode === 'bubble') {
-        setCleared(s, gx, gy, now);
-        continue;
-      }
-
-      // dot( norm(dx,dy), beamDir ) >= cos(halfArc)
-      const inv = r2 > 0 ? 1 / Math.sqrt(r2) : 0;
-      const dot = (dx * inv) * bx + (dy * inv) * by;
-      if (dot >= cosThresh) setCleared(s, gx, gy, now);
+export function isDenseFogAt(state, x, y) {
+  const s = state.miasma; if (!s) return false;
+  let opacity = 0;
+  for (const b of s.banks) {
+    const dx = (x - b.x) / b.rx;
+    const dy = (y - b.y) / b.ry;
+    const d = dx * dx + dy * dy;
+    if (d <= 1) {
+      const contrib = (1 - d) * b.alpha;
+      opacity += contrib;
+      if (opacity >= s.denseThreshold) return true;
     }
   }
+  return false;
 }
 
-// ---------- Internals ----------
-function regrowStep(state) {
-  const s = state.miasma, now = state.time;
-  const prev = s.strength;
-  const next = s.strengthNext;
+// ---- Internals -----------------------------------------------------------
 
-  // copy current -> next (no new allocation)
-  next.set(prev);
-
-  const hc = s.halfCols, hr = s.halfRows;
-
-  for (let gy = -hr; gy < hr; gy++) {
-    const gyUpOK = (gy - 1) >= -hr;
-    const gyDnOK = (gy + 1) <  hr;
-    for (let gx = -hc; gx < hc; gx++) {
-      const i = idx(s, gx, gy);
-      if (prev[i] === 1) continue;                    // already fog
-      if ((now - s.lastCleared[i]) < s.regrowDelay) continue;
-
-      let adj = 0;
-      if (gx - 1 >= -hc && prev[idx(s, gx - 1, gy)] === 1) adj++;
-      if (gx + 1 <   hc && prev[idx(s, gx + 1, gy)] === 1) adj++;
-      if (gyUpOK        && prev[idx(s, gx, gy - 1)] === 1) adj++;
-      if (gyDnOK        && prev[idx(s, gx, gy + 1)] === 1) adj++;
-
-      if (adj > 0) {
-        const p = 1 - Math.pow(1 - s.baseChance, adj);
-        if (Math.random() < p) next[i] = 1;
-      }
-    }
-  }
-
-  // swap buffers
-  s.strength = next;
-  s.strengthNext = prev;
+function spawnBank(s, state, upwind) {
+  const angle = s.windAngle;
+  const w = s.viewW || 800;
+  const h = s.viewH || 600;
+  const maxR = s.bankMaxRadius;
+  const dist = Math.sqrt(w * w + h * h) / 2 + maxR;
+  const offset = upwind ? -dist : dist;
+  const perp = angle + Math.PI / 2;
+  const spread = Math.max(w, h);
+  const cx = state.camera.x + Math.cos(angle) * offset +
+             Math.cos(perp) * (Math.random() - 0.5) * spread;
+  const cy = state.camera.y + Math.sin(angle) * offset +
+             Math.sin(perp) * (Math.random() - 0.5) * spread;
+  const rx = randRange(s.bankMinRadius, s.bankMaxRadius);
+  const ry = randRange(s.bankMinRadius, s.bankMaxRadius);
+  s.banks.push({ x: cx, y: cy, rx, ry, alpha: s.baseAlpha });
 }
 
-// March a thick ray in WORLD space and clear tiles along it
-function rayStampWorld(s, state, oxW, oyW, ang, range, thickness, now) {
-  const t = s.tile;
-  const step = t; // tile-sized step (fan rays cover rotation gaps)
-  const cos = Math.cos(ang), sin = Math.sin(ang);
-  const r2 = (thickness * 0.5) ** 2;
+function randRange(min, max) { return Math.random() * (max - min) + min; }
+function randSign() { return Math.random() < 0.5 ? -1 : 1; }
+function degToRad(d) { return d * Math.PI / 180; }
+function normalizeAngle(a) { a %= Math.PI * 2; return a < 0 ? a + Math.PI * 2 : a; }
 
-  for (let d = 0; d <= range; d += step) {
-    const pxW = oxW + cos * d;
-    const pyW = oyW + sin * d;
-
-    const minGX = Math.floor((pxW - thickness) / t);
-    const maxGX = Math.ceil ((pxW + thickness) / t);
-    const minGY = Math.floor((pyW - thickness) / t);
-    const maxGY = Math.ceil ((pyW + thickness) / t);
-
-    for (let gy = Math.max(minGY, -s.halfRows); gy <= Math.min(maxGY, s.halfRows - 1); gy++) {
-      const cyW = gy * t + t * 0.5;
-      for (let gx = Math.max(minGX, -s.halfCols); gx <= Math.min(maxGX, s.halfCols - 1); gx++) {
-        const cxW = gx * t + t * 0.5;
-        const dx = cxW - pxW, dy = cyW - pyW;
-        if (dx*dx + dy*dy <= r2) setCleared(s, gx, gy, now);
-      }
-    }
-  }
-}
-
-// ---- helpers ----
-function idx(s, gx, gy) {
-  const x = gx + s.halfCols;
-  const y = gy + s.halfRows;
-  return y * s.stride + x; // cached stride
-}
-
-function setCleared(s, gx, gy, now) {
-  const i = idx(s, gx, gy);
-  s.strength[i] = 0;
-  s.lastCleared[i] = now;
-}
-
-function toRad(deg){ return (deg * Math.PI)/180; }
-
-// --- external helpers for game logic ---
-// Convert world coords (wx, wy) to a strength[] index, or -1 if out of bounds
-export function worldToIdx(s, wx, wy) {
-  if (!s) return -1;
-  const gx = Math.floor(wx / s.tile);
-  const gy = Math.floor(wy / s.tile);
-  if (gx < -s.halfCols || gx >= s.halfCols || gy < -s.halfRows || gy >= s.halfRows) return -1;
-  return idx(s, gx, gy);
-}
-
-// Is this index fog (true) or clear (false)? Off-map counts as hazardous.
-export function isFog(s, i) {
-  return i < 0 ? true : s.strength[i] === 1;
-}

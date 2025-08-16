@@ -254,19 +254,18 @@ function draw() {
   ctx.fillStyle = "#0c0b10";
   ctx.fillRect(0, 0, w, h);
 
-if (state.activeWeapon === "beam") {
-  getBeamGeom(state, cx, cy);
-  if (!state.paused && !state.gameOver) {
-    clearWithBeam(state, cx, cy);
+  if (state.activeWeapon === "beam") {
+    getBeamGeom(state, cx, cy);
+    if (!state.paused && !state.gameOver) {
+      clearWithBeam(state, cx, cy);
+    }
   }
-}
 
-
-drawObstacles(ctx, state, cx, cy); // draw terrain first
-drawEnemies(ctx, state, cx, cy);
-drawPickups(ctx, state, cx, cy);
-drawMiasma(ctx, state, cx, cy, w, h);
-drawWorldBorder(ctx, state, cx, cy);
+  drawObstacles(ctx, state, cx, cy); // draw terrain first
+  drawEnemies(ctx, state, cx, cy);
+  drawPickups(ctx, state, cx, cy);
+  drawMiasma(state, ctx);
+  drawWorldBorder(ctx, state, cx, cy);
 if (state.activeWeapon === "beam") {
   drawBeam(ctx, state, cx, cy);
 } else if (state.activeWeapon === "drill") {
