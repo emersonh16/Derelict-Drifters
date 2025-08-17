@@ -50,7 +50,6 @@
  * @property {number} laserMinThicknessTiles
  * @property {number} laserFanCount
  * @property {number} laserFanMinDeg
- * @property {number} dps
  */
 
 /**
