@@ -11,6 +11,7 @@ const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d", { alpha: false });
 
 const state = createGameState();
+state.miasmaEnabled = true;
 state.maxScrap = config.game.winScrap;
 state.laserEnergy = state.maxLaserEnergy = config.game.maxLaserEnergy;
 state.drillHeat = 0;
@@ -63,6 +64,7 @@ window.addEventListener("keydown", (e) => {
   if (e.repeat) return;
   if (e.key === "1") state.activeWeapon = "beam";
   if (e.key === "2") state.activeWeapon = "drill";
+  if (e.key.toLowerCase() === "m") state.miasmaEnabled = !state.miasmaEnabled; // TODO: remove once miasma testing is complete
 });
 
 
@@ -96,6 +98,7 @@ window.addEventListener("keydown", (e) => {
 
 function startGame() {
   // base state
+  state.miasmaEnabled = true;
   state.time = 0;
   state.dt = 0;
   state.keys.clear();
@@ -179,7 +182,9 @@ if (state.activeWeapon === "drill" && state.drill && !state.drillOverheated) {
 
 
 
-  miasma.updateMiasma(state.miasma, state.time, dt);
+  if (state.miasmaEnabled) {
+    miasma.updateMiasma(state.miasma, state.time, dt);
+  }
   enemies.updateEnemies(state, dt);
   pickups.updatePickups(state.pickups, state.camera, state.player, state, dt);
 
@@ -208,19 +213,21 @@ if (state.activeWeapon === "drill" && state.drill && !state.drillOverheated) {
   }
 
   // Miasma damage
-  const step = state.miasma.tile * 0.5;
-  let inFog = false;
-  for (let dy = -state.player.r; dy <= state.player.r && !inFog; dy += step) {
-    for (let dx = -state.player.r; dx <= state.player.r; dx += step) {
-      if (dx*dx + dy*dy > state.player.r * state.player.r) continue;
-      const idx = miasma.worldToIdx(state.miasma, state.camera.x + dx, state.camera.y + dy);
-      if (miasma.isFog(state.miasma, idx)) { inFog = true; break; }
+   if (state.miasmaEnabled) {
+    const step = state.miasma.tile * 0.5;
+    let inFog = false;
+    for (let dy = -state.player.r; dy <= state.player.r && !inFog; dy += step) {
+      for (let dx = -state.player.r; dx <= state.player.r; dx += step) {
+        if (dx*dx + dy*dy > state.player.r * state.player.r) continue;
+        const idx = miasma.worldToIdx(state.miasma, state.camera.x + dx, state.camera.y + dy);
+        if (miasma.isFog(state.miasma, idx)) { inFog = true; break; }
+      }
     }
-  }
-  if (inFog) {
-  state.health -= state.miasma.dps * dt;
-  state.damageFlash = 0.2; // trigger red flash
-  if (state.health < 0) state.health = 0;
+    if (inFog) {
+      state.health -= state.miasma.dps * dt;
+      state.damageFlash = 0.2; // trigger red flash
+      if (state.health < 0) state.health = 0;
+    }
 }
 
 
@@ -260,18 +267,20 @@ function draw() {
   ctx.fillStyle = "#0c0b10";
   ctx.fillRect(0, 0, w, h);
 
-if (state.activeWeapon === "beam") {
-  beam.update(state.beam, state.mouse, cx, cy);
-  if (!state.paused && !state.gameOver) {
-    miasma.clearWithBeam(state.miasma, state.beam, state.camera, state.time, cx, cy);
+  if (state.activeWeapon === "beam") {
+    beam.update(state.beam, state.mouse, cx, cy);
+    if (state.miasmaEnabled && !state.paused && !state.gameOver) {
+      miasma.clearWithBeam(state.miasma, state.beam, state.camera, state.time, cx, cy);
+    }
   }
-}
 
 
   world.drawObstacles(ctx, state.miasma, state.obstacleGrid, state.camera, cx, cy); // draw terrain first
   enemies.drawEnemies(ctx, state, cx, cy);
   pickups.drawPickups(ctx, state.pickups, state.camera, cx, cy);
-  miasma.drawMiasma(ctx, state.miasma, state.camera, cx, cy, w, h);
+  if (state.miasmaEnabled) {
+    miasma.drawMiasma(ctx, state.miasma, state.camera, cx, cy, w, h);
+  }
   world.drawWorldBorder(ctx, state.world, state.camera, cx, cy);
   if (state.activeWeapon === "beam") {
     beam.draw(ctx, state.beam, cx, cy);
