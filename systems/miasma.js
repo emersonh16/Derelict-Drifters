@@ -195,6 +195,78 @@ export function isFog(m, idx) {
 }
 
 
-export function clearWithBeam(m, beam, camera, time, cx, cy) {
-  // No-op for now — real clearing comes in Step 4
+// Clear tiles intersecting the beam shape.
+// Origin is the player's world position (camera center).
+export function clearWithBeam(m, beamState, camera, time, cx, cy) {
+  // Read beam params we need
+  const mode     = beamState.mode;        // "bubble" | "cone" | "laser"
+  const angle    = beamState.angle;       // radians
+  const halfArc  = beamState.halfArc;     // radians
+  const maxRange = mode === "bubble" ? (beamState.radius || 0) : (beamState.range || 0);
+  if (!maxRange || maxRange <= 0) return;
+
+  // World origin (player)
+  const wx0 = camera.x;
+  const wy0 = camera.y;
+
+  // Center tile (grid is centered at world 0,0)
+  const cxTiles = Math.floor(m.cols / 2);
+  const cyTiles = Math.floor(m.rows / 2);
+
+  // Tile index of the player's world position
+  const ix0 = Math.floor(wx0 / m.tile) + cxTiles;
+  const iy0 = Math.floor(wy0 / m.tile) + cyTiles;
+
+  // Range in tiles
+  const rTiles = Math.ceil(maxRange / m.tile);
+
+  // World-space origin of the grid (to compute tile centers)
+  const originX = -cxTiles * m.tile;
+  const originY = -cyTiles * m.tile;
+
+  // Helper: smallest signed angle difference (-PI..PI)
+  const angDiff = (a, b) => {
+    let d = a - b;
+    while (d >  Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    return Math.abs(d);
+  };
+
+  const cols = m.cols, rows = m.rows, tiles = m.tiles, t = m.tile;
+
+  // Scan only the local bounding box around the player
+  const minY = Math.max(0, iy0 - rTiles);
+  const maxY = Math.min(rows - 1, iy0 + rTiles);
+  const minX = Math.max(0, ix0 - rTiles);
+  const maxX = Math.min(cols - 1, ix0 + rTiles);
+
+  for (let iy = minY; iy <= maxY; iy++) {
+    // y center of this tile in world coords
+    const wy = originY + iy * t + t * 0.5;
+    const dy = wy - wy0;
+
+    for (let ix = minX; ix <= maxX; ix++) {
+      const idx = iy * cols + ix;
+      if (tiles[idx] === 0) continue; // already clear
+
+      // x center of this tile in world coords
+      const wx = originX + ix * t + t * 0.5;
+      const dx = wx - wx0;
+
+      const dist = Math.hypot(dx, dy);
+      if (dist > maxRange) continue; // outside reach
+
+      if (mode === "bubble") {
+        // simple circle
+        tiles[idx] = 0;
+        continue;
+      }
+
+      // cone/laser: also require angle within halfArc
+      const a = Math.atan2(dy, dx);
+      if (angDiff(a, angle) <= halfArc) {
+        tiles[idx] = 0;
+      }
+    }
+  }
 }
