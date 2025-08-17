@@ -1,8 +1,9 @@
 // core/game.js
 import { config } from "../core/config.js";
-import { beam, miasma, enemies, pickups, world, drill } from "../systems/index.js";
+import { beam, miasma, enemies, pickups, world, drill, wind } from "../systems/index.js";
 import { hud, devhud } from "../ui/index.js";
 import { createGameState } from "./state.js";
+
 
 
 
@@ -126,6 +127,10 @@ function startGame() {
   state.mouse.y = canvas.height / 2;
   state.pendingMouse.x = state.mouse.x;
   state.pendingMouse.y = state.mouse.y;
+
+  // wind we must
+  state.wind = wind.initWind(config.wind);
+
 
   // world + systems (same order as first load)
   state.miasma = miasma.initMiasma(config.miasma);                 // brand-new fog grid

@@ -93,5 +93,23 @@ export const config = {
     heatColorCold: '#22cc55',
     heatColorWarm: '#ffcc33',
     heatColorHot: '#ff3333'
+  },
+
+  // --- New dynamic systems ---
+  wind: {
+    minSpeed: 0.5,         // tiles/sec
+    maxSpeed: 3.0,         // tiles/sec
+    smoothTime: 5.0,       // sec to lerp toward target
+    bigShiftInterval: 60,  // sec between major shifts
+    bigShiftMagnitude: Math.PI / 2 // ~90° turn
+  },
+
+  dynamicMiasma: {
+    tile: 14,          // px per tile
+    spawnProb: 0.2,    // base chance fog spawns on upwind edge
+    spawnJitter: 0.05, // +/- noise
+    bufferCols: 4,     // extra cols kept offscreen for smooth shift
+    bufferRows: 4
   }
+
 };

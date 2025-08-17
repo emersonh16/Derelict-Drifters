@@ -120,6 +120,16 @@
  */
 
 /**
+ * @typedef {Object} WindState
+ * @property {number} direction
+ * @property {number} speed
+ * @property {"manual"|"auto"} mode
+ * @property {number} driftTimer
+ * @property {number} nextShiftAt
+ */
+
+
+/**
  * @typedef {Object} GameState
  * @property {number} time
  * @property {number} dt
@@ -153,6 +163,8 @@
  * @property {DrillState} [drill]
  * @property {{show?:boolean,perf?:any}} [dev]
  * @property {Array<EnemyProjectile>} enemyProjectiles
+ * @property {WindState} [wind]
+
  */
 
 /**
