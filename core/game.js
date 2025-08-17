@@ -138,7 +138,7 @@ function startGame() {
   state.pendingMouse.y = state.mouse.y;
 
   // world + systems (same order as first load)
-  state.miasma = miasma.initMiasma(config.miasma);                 // brand-new fog grid
+  state.miasma = miasma.init(config.miasma);                        // brand-new fog grid
   const wInit = world.initWorld(state.miasma, state.player, config.world); // world depends on miasma size
   state.world = wInit.world;
   state.obstacleGrid = wInit.obstacleGrid;
@@ -196,7 +196,7 @@ function update(dt) {
   state.wind.mode = wind.mode;
 
   if (state.miasmaEnabled) {
-    miasma.updateMiasma(state.miasma, state.time, dt);
+    miasma.update(state.miasma, dt);
   }
   enemies.updateEnemies(state, dt);
   pickups.updatePickups(state.pickups, state.camera, state.player, state, dt);
@@ -293,7 +293,7 @@ function draw() {
     beam.update(state.beam, state.mouse, cx, cy);
     if (state.miasmaEnabled && !state.paused && !state.gameOver) {
       // keep using the REAL camera for gameplay/clearing logic
-      miasma.clearWithBeam(state.miasma, state.beam, state.camera, state.time, cx, cy);
+      miasma.clearWithBeam(state.miasma, state.beam, state.camera, cx, cy);
     }
   }
 
@@ -303,7 +303,7 @@ function draw() {
   pickups.drawPickups(ctx, state.pickups, camDraw, cx, cy);  // now uses camDraw
 
   if (state.miasmaEnabled) {
-    miasma.drawMiasma(ctx, state.miasma, camDraw, cx, cy, w, h); // now uses camDraw
+    miasma.draw(ctx, state.miasma, camDraw, cx, cy, w, h); // now uses camDraw
   }
 
   world.drawWorldBorder(ctx, state.world, camDraw, cx, cy); // now uses camDraw

@@ -40,13 +40,10 @@
  * @property {number} rows
  * @property {number} stride
  * @property {number} size
- * @property {Uint8Array} strength
- * @property {Uint8Array} strengthNext
- * @property {number} regrowDelay
- * @property {number} baseChance
- * @property {number} tickHz
- * @property {Float32Array} lastCleared
- * @property {number} _accum
+ * @property {Uint8Array} cells
+ * @property {number} spawnChance
+ * @property {number} _driftX
+ * @property {number} _driftY
  * @property {number} laserMinThicknessTiles
  * @property {number} laserFanCount
  * @property {number} laserFanMinDeg

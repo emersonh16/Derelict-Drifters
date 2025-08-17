@@ -1,13 +1,19 @@
-
 // systems/miasma.js
-// Big miasma grid with crystal regrowth + beam clearing.
-// Laser uses a thick world-space ray (with a tiny fan) so it cleanly sweeps.
+// Fog grid that drifts with the wind and can be cleared by the beam.
+
+import * as wind from "./wind.js";
+
 /**
  * @typedef {import('../core/state.js').MiasmaState} MiasmaState
  * @typedef {import('../core/state.js').BeamState} BeamState
  */
 
-export function initMiasma(opts = {}) {
+/**
+ * Initialize a new miasma state.
+ * @param {object} [opts]
+ * @returns {MiasmaState}
+ */
+export function init(opts = {}) {
   const halfCols = Math.floor((opts.cols ?? 400) / 2);
   const halfRows = Math.floor((opts.rows ?? 400) / 2);
   const cols = halfCols * 2;
@@ -16,47 +22,65 @@ export function initMiasma(opts = {}) {
 
   /** @type {MiasmaState} */
   const miasma = {
-    // grid
     tile: opts.tile ?? 14,
     halfCols, halfRows,
     cols, rows,
     stride: cols,
     size,
 
-    // double buffer (no per-tick allocations)
-    strength: new Uint8Array(size).fill(1),       // 1 = fog, 0 = clear
-    strengthNext: new Uint8Array(size).fill(1),
+    // boolean grid: 1 = fog, 0 = clear
+    cells: new Uint8Array(size).fill(1),
 
-    // regrowth
-    regrowDelay: opts.regrowDelay ?? 1.0,
-    baseChance:  opts.baseChance  ?? 0.20,
-    tickHz:      opts.tickHz      ?? 8,
-    lastCleared: new Float32Array(size).fill(-1e9),
-    _accum: 0,
+    // spawn probability for new rows/cols (0-100%)
+    spawnChance: opts.spawnChance ?? 80,
+
+    // drift accumulators in tile units
+    _driftX: 0,
+    _driftY: 0,
 
     // laser sweep tunables (on miasma for perf/caching)
     laserMinThicknessTiles: opts.laserMinThicknessTiles ?? 2.0,
     laserFanCount:          opts.laserFanCount          ?? 3,
     laserFanMinDeg:         opts.laserFanMinDeg         ?? 0.25,
 
-    // NEW: damage per second when the player is in fog
+    // damage per second when the player is in fog
     dps: opts.dps ?? 35
-
   };
   return miasma;
 }
 
-export function updateMiasma(s, time, dt) {
+/**
+ * Advance the miasma grid according to current wind values.
+ * @param {MiasmaState} s
+ * @param {number} dt
+ */
+export function update(s, dt) {
   if (!s) return;
-  s._accum += dt;
-  const step = 1 / s.tickHz;
-  while (s._accum >= step) {
-    s._accum -= step;
-    regrowStep(s, time);
+
+  // wind vector in tiles
+  const vx = Math.cos(wind.direction) * wind.speed;
+  const vy = Math.sin(wind.direction) * wind.speed;
+
+  s._driftX += (vx * dt) / s.tile;
+  s._driftY += (vy * dt) / s.tile;
+
+  const shiftX = s._driftX | 0; // truncate toward zero
+  const shiftY = s._driftY | 0;
+
+  if (shiftY) {
+    shiftRows(s, shiftY);
+    s._driftY -= shiftY;
+  }
+  if (shiftX) {
+    shiftCols(s, shiftX);
+    s._driftX -= shiftX;
   }
 }
 
-export function drawMiasma(ctx, s, camera, cx, cy, w, h) {
+/**
+ * Draw the miasma grid.
+ */
+export function draw(ctx, s, camera, cx, cy, w, h) {
   if (!s) return;
   const t = s.tile;
 
@@ -82,7 +106,7 @@ export function drawMiasma(ctx, s, camera, cx, cy, w, h) {
   for (let gy = minGY; gy < maxGY; gy++, sy += t) {
     let sx = Math.floor(minGX * t - camera.x + cx);
     for (let gx = minGX; gx < maxGX; gx++, sx += t) {
-      if (s.strength[idx(s, gx, gy)] === 1) {
+      if (s.cells[idx(s, gx, gy)] === 1) {
         ctx.rect(sx, sy, t, t);
       }
     }
@@ -92,13 +116,15 @@ export function drawMiasma(ctx, s, camera, cx, cy, w, h) {
   ctx.restore();
 }
 
-export function clearWithBeam(s, b, camera, time, cx, cy) {
+/**
+ * Clear fog along the current beam volume.
+ */
+export function clearWithBeam(s, b, camera, cx, cy) {
   if (!s || !b || b.mode === 'none') return;
 
   const t = s.tile;
   const playerWX = camera.x;
   const playerWY = camera.y;
-  const now = time;
 
   // -------- LASER: carve a thick, continuous ray (plus a tiny fan) --------
   if (b.mode === 'laser') {
@@ -113,7 +139,7 @@ export function clearWithBeam(s, b, camera, time, cx, cy) {
 
     for (let i = 0; i < fan; i++) {
       const ang = start + i * dAng;
-      rayStampWorld(s, playerWX, playerWY, ang, b.range + t, thickness, now);
+      rayStampWorld(s, playerWX, playerWY, ang, b.range + t, thickness);
     }
     return;
   }
@@ -140,56 +166,74 @@ export function clearWithBeam(s, b, camera, time, cx, cy) {
       if (r2 > maxR2) continue;
 
       if (b.mode === 'bubble') {
-        setCleared(s, gx, gy, now);
+        setCleared(s, gx, gy);
         continue;
       }
 
       // dot( norm(dx,dy), beamDir ) >= cos(halfArc)
       const inv = r2 > 0 ? 1 / Math.sqrt(r2) : 0;
       const dot = (dx * inv) * bx + (dy * inv) * by;
-      if (dot >= cosThresh) setCleared(s, gx, gy, now);
+      if (dot >= cosThresh) setCleared(s, gx, gy);
     }
   }
 }
 
 // ---------- Internals ----------
-function regrowStep(s, now) {
-  const prev = s.strength;
-  const next = s.strengthNext;
 
-  // copy current -> next (no new allocation)
-  next.set(prev);
+function shiftCols(s, n) {
+  const cols = s.cols;
+  const rows = s.rows;
+  const grid = s.cells;
+  const chance = s.spawnChance;
 
-  const hc = s.halfCols, hr = s.halfRows;
-
-  for (let gy = -hr; gy < hr; gy++) {
-    const gyUpOK = (gy - 1) >= -hr;
-    const gyDnOK = (gy + 1) <  hr;
-    for (let gx = -hc; gx < hc; gx++) {
-      const i = idx(s, gx, gy);
-      if (prev[i] === 1) continue;                    // already fog
-      if ((now - s.lastCleared[i]) < s.regrowDelay) continue;
-
-      let adj = 0;
-      if (gx - 1 >= -hc && prev[idx(s, gx - 1, gy)] === 1) adj++;
-      if (gx + 1 <   hc && prev[idx(s, gx + 1, gy)] === 1) adj++;
-      if (gyUpOK        && prev[idx(s, gx, gy - 1)] === 1) adj++;
-      if (gyDnOK        && prev[idx(s, gx, gy + 1)] === 1) adj++;
-
-      if (adj > 0) {
-        const p = 1 - Math.pow(1 - s.baseChance, adj);
-        if (Math.random() < p) next[i] = 1;
+  if (n > 0) { // wind blowing east, fill west edge
+    for (let row = 0; row < rows; row++) {
+      const start = row * cols;
+      grid.copyWithin(start + n, start, start + cols - n);
+      for (let x = 0; x < n; x++) {
+        grid[start + x] = rollSpawn(chance);
+      }
+    }
+  } else if (n < 0) { // wind blowing west, fill east edge
+    const shift = -n;
+    for (let row = 0; row < rows; row++) {
+      const start = row * cols;
+      grid.copyWithin(start, start + shift, start + cols);
+      for (let x = cols - shift; x < cols; x++) {
+        grid[start + x] = rollSpawn(chance);
       }
     }
   }
+}
 
-  // swap buffers
-  s.strength = next;
-  s.strengthNext = prev;
+function shiftRows(s, n) {
+  const cols = s.cols;
+  const grid = s.cells;
+  const chance = s.spawnChance;
+  const size = s.size;
+
+  if (n > 0) { // wind blowing south, fill north edge
+    grid.copyWithin(n * cols, 0, size - n * cols);
+    for (let i = 0; i < n * cols; i++) {
+      grid[i] = rollSpawn(chance);
+    }
+  } else if (n < 0) { // wind blowing north, fill south edge
+    const shift = -n;
+    grid.copyWithin(0, shift * cols, size);
+    for (let i = size - shift * cols; i < size; i++) {
+      grid[i] = rollSpawn(chance);
+    }
+  }
+}
+
+function rollSpawn(baseChance) {
+  const jitter = (Math.random() * 20) - 10; // [-10,10)
+  const p = Math.max(0, Math.min(100, baseChance + jitter));
+  return Math.random() * 100 < p ? 1 : 0;
 }
 
 // March a thick ray in WORLD space and clear tiles along it
-function rayStampWorld(s, oxW, oyW, ang, range, thickness, now) {
+function rayStampWorld(s, oxW, oyW, ang, range, thickness) {
   const t = s.tile;
   const step = t; // tile-sized step (fan rays cover rotation gaps)
   const cos = Math.cos(ang), sin = Math.sin(ang);
@@ -209,7 +253,7 @@ function rayStampWorld(s, oxW, oyW, ang, range, thickness, now) {
       for (let gx = Math.max(minGX, -s.halfCols); gx <= Math.min(maxGX, s.halfCols - 1); gx++) {
         const cxW = gx * t + t * 0.5;
         const dx = cxW - pxW, dy = cyW - pyW;
-        if (dx*dx + dy*dy <= r2) setCleared(s, gx, gy, now);
+        if (dx*dx + dy*dy <= r2) setCleared(s, gx, gy);
       }
     }
   }
@@ -222,16 +266,15 @@ function idx(s, gx, gy) {
   return y * s.stride + x; // cached stride
 }
 
-function setCleared(s, gx, gy, now) {
+function setCleared(s, gx, gy) {
   const i = idx(s, gx, gy);
-  s.strength[i] = 0;
-  s.lastCleared[i] = now;
+  s.cells[i] = 0;
 }
 
 function toRad(deg){ return (deg * Math.PI)/180; }
 
 // --- external helpers for game logic ---
-// Convert world coords (wx, wy) to a strength[] index, or -1 if out of bounds
+// Convert world coords (wx, wy) to a cells[] index, or -1 if out of bounds
 export function worldToIdx(s, wx, wy) {
   if (!s) return -1;
   const gx = Math.floor(wx / s.tile);
@@ -242,5 +285,6 @@ export function worldToIdx(s, wx, wy) {
 
 // Is this index fog (true) or clear (false)? Off-map counts as hazardous.
 export function isFog(s, i) {
-  return i < 0 ? true : s.strength[i] === 1;
+  return i < 0 ? true : s.cells[i] === 1;
 }
+
