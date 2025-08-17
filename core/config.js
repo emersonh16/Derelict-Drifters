@@ -40,19 +40,22 @@ export const config = {
     laserTipRadius: 14
   },
 
+  wind: {
+    minSpeed: 0,
+    maxSpeed: 20,
+    smoothTime: 5,
+    bigShiftInterval: 60,
+    bigShiftMagnitude: { direction: Math.PI, speed: 5 }
+  },
+
   miasma: {
-    tile: 5,
+    tile: 14,
     cols: 450,
     rows: 450,
-    regrowDelay: 1.0,
-    baseChance: 0.20,
-    tickHz: 8,
-
-    // Laser sweep tuning
-    laserMinThicknessTiles: 2.0,
-    laserFanCount: 3,
-    laserFanMinDeg: 0.25,
-
+    spawnProb: 0.5,
+    spawnJitter: 0.1,
+    bufferCols: 4,
+    bufferRows: 4,
     dps: 35
   },
 

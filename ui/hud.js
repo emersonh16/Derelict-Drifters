@@ -43,13 +43,24 @@ export function initHUD(state, opts = {}) {
     `</div>` +
 
     `<div>Scrap: <span id="hud-scrap-num"></span></div>`;
+    `<div style="margin-top:6px;display:flex;align-items:center;">` +
+      `<div id="hud-wind-vane" style="width:0;height:0;border-left:10px solid transparent;` +
+      `border-right:10px solid transparent;border-bottom:20px solid #fff;margin-right:6px;` +
+      `transform-origin:50% 75%;"></div>` +
+      `<div style="position:relative;width:${barW}px;height:${barH}px;border-radius:6px;` +
+        `background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);overflow:hidden;">` +
+        `<div id="hud-miasma-fill" style="position:absolute;left:0;top:0;bottom:0;width:0;background:#66ccff;"></div>` +
+      `</div>` +
+    `</div>`;
 
   els = {
     hpNum:    root.querySelector('#hud-hp-num'),
     hpFill:   root.querySelector('#hud-hp-fill'),
     laserFill: root.querySelector('#hud-laser-fill'),
     heatFill: root.querySelector('#hud-heat-fill'),
-    scrapNum: root.querySelector('#hud-scrap-num')
+    scrapNum: root.querySelector('#hud-scrap-num'),
+    windVane: root.querySelector('#hud-wind-vane'),
+    miasmaFill: root.querySelector('#hud-miasma-fill')
   };
 
   updateHUD(state);
@@ -85,4 +96,12 @@ export function updateHUD(state) {
   // --- Scrap ---
   var scrap = Math.round((state && typeof state.scrap === 'number') ? state.scrap : 0);
   els.scrapNum.textContent = scrap;
+
+  if (els.windVane && state.wind) {
+    els.windVane.style.transform = `rotate(${state.wind.direction}rad)`;
+  }
+  if (els.miasmaFill && state.miasma) {
+    const pct = Math.max(0, Math.min(1, state.miasma.spawnProb));
+    els.miasmaFill.style.width = (pct * 100).toFixed(1) + '%';
+  }
 }

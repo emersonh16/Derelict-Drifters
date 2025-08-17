@@ -1,6 +1,6 @@
 // core/game.js
 import { config } from "../core/config.js";
-import { beam, miasma, enemies, pickups, world, drill } from "../systems/index.js";
+import { beam, miasma, enemies, pickups, world, drill, wind } from "../systems/index.js";
 import { hud, devhud } from "../ui/index.js";
 import { createGameState } from "./state.js";
 
@@ -76,6 +76,7 @@ function togglePause() {
   if (!state.paused) {
     state.mouse.x = state.pendingMouse.x;
     state.mouse.y = state.pendingMouse.y;
+    devhud.applyDevHUD(state);
   }
 }
 
@@ -129,6 +130,7 @@ function startGame() {
 
   // world + systems (same order as first load)
   state.miasma = miasma.initMiasma(config.miasma);                 // brand-new fog grid
+  state.wind = wind.initWind(config.wind);
   const wInit = world.initWorld(state.miasma, state.player, config.world); // world depends on miasma size
   state.world = wInit.world;
   state.obstacleGrid = wInit.obstacleGrid;
@@ -184,8 +186,9 @@ if (state.activeWeapon === "drill" && state.drill && !state.drillOverheated) {
 
 
 
+  wind.updateWind(state.wind, dt, config.wind);
   if (state.miasmaEnabled) {
-    miasma.updateMiasma(state.miasma, state.time, dt);
+    miasma.updateMiasma(state.miasma, state.wind, dt);
   }
   enemies.updateEnemies(state, dt);
   pickups.updatePickups(state.pickups, state.camera, state.player, state, dt);
@@ -282,7 +285,7 @@ function draw() {
     beam.update(state.beam, state.mouse, cx, cy);
     if (state.miasmaEnabled && !state.paused && !state.gameOver) {
       // keep using the REAL camera for gameplay/clearing logic
-      miasma.clearWithBeam(state.miasma, state.beam, state.camera, state.time, cx, cy);
+      miasma.clearWithBeam(state.miasma, state.beam, state.camera, cx, cy);
     }
   }
 
@@ -358,7 +361,7 @@ function loop(now) {
   draw();
 
   // Dev HUD: update numbers, then draw the tiny box (top-right)
-  devhud.updateDevHUD(state, state.dt);
+  devhud.updateDevHUD(state);
   devhud.drawDevHUD(ctx, state);
 
   requestAnimationFrame(loop);

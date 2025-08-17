@@ -40,17 +40,25 @@
  * @property {number} rows
  * @property {number} stride
  * @property {number} size
- * @property {Uint8Array} strength
- * @property {Uint8Array} strengthNext
- * @property {number} regrowDelay
- * @property {number} baseChance
- * @property {number} tickHz
- * @property {Float32Array} lastCleared
- * @property {number} _accum
- * @property {number} laserMinThicknessTiles
- * @property {number} laserFanCount
- * @property {number} laserFanMinDeg
+ * @property {Uint8Array} tiles
+ * @property {number} spawnProb
+ * @property {number} spawnJitter
+ * @property {number} bufferCols
+ * @property {number} bufferRows
  * @property {number} dps
+ * @property {number} [_accumX]
+ * @property {number} [_accumY]
+ */
+
+/**
+ * @typedef {Object} WindState
+ * @property {number} direction
+ * @property {number} speed
+ * @property {"manual"|"auto"} mode
+ * @property {number} driftTimer
+ * @property {number} nextShiftAt
+ * @property {number} targetDir
+ * @property {number} targetSpeed
  */
 
 /**
@@ -147,6 +155,7 @@
  * @property {boolean} drillDidHit
  * @property {BeamState} [beam]
  * @property {MiasmaState} [miasma]
+ * @property {WindState} [wind]
  * @property {EnemyState} [enemies]
  * @property {WorldState} [world]
  * @property {Uint8Array} [obstacleGrid]
