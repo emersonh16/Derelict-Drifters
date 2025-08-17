@@ -9,6 +9,8 @@ import { createGameState } from "./state.js";
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d", { alpha: false });
+ctx.imageSmoothingEnabled = false; // keeps pixels crisp (not required, but nice)
+
 
 const state = createGameState();
 state.miasmaEnabled = true;
@@ -262,33 +264,46 @@ if (state.activeWeapon === "drill" && state.drill && !state.drillOverheated) {
 // ---- Draw ----
 function draw() {
   const w = canvas.width, h = canvas.height;
-  const cx = w / 2, cy = h / 2;
 
+  // 👇 snap screen center and camera only for rendering (prevents seams)
+  const cx = Math.round(w / 2);
+  const cy = Math.round(h / 2);
+  const camDraw = {
+    x: Math.round(state.camera.x),
+    y: Math.round(state.camera.y),
+  };
+
+  // background
   ctx.fillStyle = "#0c0b10";
   ctx.fillRect(0, 0, w, h);
 
+  // Beam sim/UI stays the same; uses screen center (cx, cy)
   if (state.activeWeapon === "beam") {
     beam.update(state.beam, state.mouse, cx, cy);
     if (state.miasmaEnabled && !state.paused && !state.gameOver) {
+      // keep using the REAL camera for gameplay/clearing logic
       miasma.clearWithBeam(state.miasma, state.beam, state.camera, state.time, cx, cy);
     }
   }
 
+  // ✅ pass the SNAPPED camera to world-space rendering to avoid seams
+  world.drawObstacles(ctx, state.miasma, state.obstacleGrid, camDraw, cx, cy);
+  enemies.drawEnemies(ctx, state, cx, cy);                   // unchanged (uses state internally)
+  pickups.drawPickups(ctx, state.pickups, camDraw, cx, cy);  // now uses camDraw
 
-  world.drawObstacles(ctx, state.miasma, state.obstacleGrid, state.camera, cx, cy); // draw terrain first
-  enemies.drawEnemies(ctx, state, cx, cy);
-  pickups.drawPickups(ctx, state.pickups, state.camera, cx, cy);
   if (state.miasmaEnabled) {
-    miasma.drawMiasma(ctx, state.miasma, state.camera, cx, cy, w, h);
+    miasma.drawMiasma(ctx, state.miasma, camDraw, cx, cy, w, h); // now uses camDraw
   }
-  world.drawWorldBorder(ctx, state.world, state.camera, cx, cy);
+
+  world.drawWorldBorder(ctx, state.world, camDraw, cx, cy); // now uses camDraw
+
   if (state.activeWeapon === "beam") {
     beam.draw(ctx, state.beam, cx, cy);
   } else if (state.activeWeapon === "drill") {
     drill.drawDrill(ctx, state.drill, state.mouse, state.activeWeapon, cx, cy, state.drillOverheated);
   }
 
-
+  // player at screen center
   ctx.fillStyle = "#9a3b31";
   ctx.beginPath();
   ctx.arc(cx, cy, state.player.r, 0, Math.PI * 2);
@@ -327,6 +342,7 @@ function draw() {
     }
   }
 }
+
 
 // ---- Main Loop ----
 let last = performance.now();
