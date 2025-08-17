@@ -105,7 +105,7 @@ export const config = {
   },
 
 dynamicMiasma: {
-  tile: 14,
+  tile: 5,      // was 14
   cols: 450,
   rows: 450,
   spawnProb: 0.2,

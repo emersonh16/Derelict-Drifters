@@ -161,16 +161,21 @@ function shift(m, dx, dy) {
  */
 export function drawMiasma(ctx, m, cam, cx, cy, w, h) {
   ctx.fillStyle = "rgba(80,40,120,0.4)";
+
+  // Center the grid at world (0,0) to match worldToIdx
+  const originX = -Math.floor(m.cols / 2) * m.tile;
+  const originY = -Math.floor(m.rows / 2) * m.tile;
+
   for (let y = 0; y < m.rows; y++) {
+    const wy = originY + y * m.tile - cam.y + cy;
     for (let x = 0; x < m.cols; x++) {
-      if (m.tiles[y * m.cols + x] === 1) {
-        const wx = x * m.tile - cam.x + cx;
-        const wy = y * m.tile - cam.y + cy;
-        ctx.fillRect(wx, wy, m.tile, m.tile);
-      }
+      if (m.tiles[y * m.cols + x] !== 1) continue;
+      const wx = originX + x * m.tile - cam.x + cx;
+      ctx.fillRect(wx, wy, m.tile, m.tile);
     }
   }
 }
+
 
 export function worldToIdx(m, wx, wy) {
   const cx = Math.floor(m.cols / 2);
