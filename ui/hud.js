@@ -1,5 +1,6 @@
 /** @typedef {import('../core/state.js').GameState} GameState */
 import { config } from '../core/config.js';
+
 var els = null;
 
 /** @param {GameState} state */
@@ -24,7 +25,10 @@ export function initHUD(state, opts = {}) {
     `border-radius:8px;line-height:1.2;user-select:none;pointer-events:none;`;
 
   root.innerHTML =
+    // HP number
     `<div style="margin-bottom:6px;">HP: <span id="hud-hp-num"></span></div>` +
+
+    // HP bar
     `<div style="position:relative;width:${barW}px;height:${barH}px;border-radius:6px;` +
       `background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);overflow:hidden;margin-bottom:4px;">` +
       `<div id="hud-hp-fill" style="position:absolute;left:0;top:0;bottom:0;width:0;background:${hpFillColor};"></div>` +
@@ -42,14 +46,34 @@ export function initHUD(state, opts = {}) {
       `<div id="hud-heat-fill" style="position:absolute;left:0;top:0;bottom:0;width:0;background:${config.drill.heatColorCold};"></div>` +
     `</div>` +
 
-    `<div>Scrap: <span id="hud-scrap-num"></span></div>`;
+    // Scrap
+    `<div>Scrap: <span id="hud-scrap-num"></span></div>` +
+
+    // Wind (vane + degrees)
+    `<div style="margin-top:6px;">
+       Wind: <span id="hud-wind-deg">0°</span>
+       <span id="hud-wind-vane" style="display:inline-block;transform:rotate(0deg);margin-left:6px;">▲</span>
+     </div>` +
+
+    // Miasma intensity bar (spawn probability)
+    `<div style="margin-top:4px;">
+       <div style="position:relative;width:${barW}px;height:${barH}px;border-radius:6px;
+         background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);
+         overflow:hidden;">
+         <div id="hud-miasma-fill" style="position:absolute;left:0;top:0;bottom:0;width:0;background:#bb88ffcc;"></div>
+       </div>
+       <div style="font-size:${Math.max(10, fontSize-2)}px;opacity:0.85;margin-top:2px;">Fog intensity</div>
+     </div>`;
 
   els = {
-    hpNum:    root.querySelector('#hud-hp-num'),
-    hpFill:   root.querySelector('#hud-hp-fill'),
-    laserFill: root.querySelector('#hud-laser-fill'),
-    heatFill: root.querySelector('#hud-heat-fill'),
-    scrapNum: root.querySelector('#hud-scrap-num')
+    hpNum:      root.querySelector('#hud-hp-num'),
+    hpFill:     root.querySelector('#hud-hp-fill'),
+    laserFill:  root.querySelector('#hud-laser-fill'),
+    heatFill:   root.querySelector('#hud-heat-fill'),
+    scrapNum:   root.querySelector('#hud-scrap-num'),
+    windDeg:    root.querySelector('#hud-wind-deg'),
+    windVane:   root.querySelector('#hud-wind-vane'),
+    miasmaFill: root.querySelector('#hud-miasma-fill'),
   };
 
   updateHUD(state);
@@ -85,4 +109,19 @@ export function updateHUD(state) {
   // --- Scrap ---
   var scrap = Math.round((state && typeof state.scrap === 'number') ? state.scrap : 0);
   els.scrapNum.textContent = scrap;
+
+  // --- Wind (direction readout + vane) ---
+  if (els.windDeg && els.windVane && state.wind) {
+    let deg = (state.wind.direction * 180 / Math.PI) % 360;
+    if (deg < 0) deg += 360;
+    els.windDeg.textContent = Math.round(deg) + '°';
+    els.windVane.style.transform = `rotate(${deg}deg)`;
+  }
+
+  // --- Miasma intensity (spawn probability) ---
+  if (els.miasmaFill) {
+    const prob = (state.miasma && typeof state.miasma.spawnProb === 'number')
+      ? state.miasma.spawnProb : 0;
+    els.miasmaFill.style.width = (Math.max(0, Math.min(1, prob)) * 100).toFixed(1) + '%';
+  }
 }
