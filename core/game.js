@@ -100,7 +100,7 @@ window.addEventListener("keydown", (e) => {
 
 
 function startGame() {
-  // base state
+  // --- Base run/reset ---
   state.miasmaEnabled = true;
   state.time = 0;
   state.dt = 0;
@@ -109,41 +109,51 @@ function startGame() {
   state.gameOver = false;
   state.win = false;
   state.damageFlash = 0;
+
+  // Drill heat state
   state.drillHeat = 0;
   state.maxDrillHeat = config.drill.maxHeat;
   state.drillOverheated = false;
   state.drillCoolTimer = 0;
   state.drillDidHit = false;
 
-  // player / run
+  // Player / run stats
   state.health = state.maxHealth;
-  console.log("spawn health", state.health, "max", state.maxHealth);
   state.scrap = 0;
   state.pickups.length = 0;
   state.camera.x = 0;
   state.camera.y = 0;
 
-  // keep mouse centered (like a page refresh)
+  // Mouse centered (like a fresh load)
   state.mouse.x = canvas.width / 2;
   state.mouse.y = canvas.height / 2;
   state.pendingMouse.x = state.mouse.x;
   state.pendingMouse.y = state.mouse.y;
 
-  // wind we must
+  // --- Wind first (new system) ---
   state.wind = wind.initWind(config.wind);
 
+  // --- World + systems (order matters) ---
+  // New conveyor-belt miasma uses dynamicMiasma config
+  state.miasma = miasma.initMiasma(config.dynamicMiasma);
 
-  // world + systems (same order as first load)
-state.miasma = miasma.initMiasma(config.dynamicMiasma);
-  const wInit = world.initWorld(state.miasma, state.player, config.world); // world depends on miasma size
+  // World depends on miasma dimensions
+  const wInit = world.initWorld(state.miasma, state.player, config.world);
   state.world = wInit.world;
   state.obstacleGrid = wInit.obstacleGrid;
+
+  // Beam system (controls/params from config.beam)
   state.beam = beam.init(config.beam);
+
+  // Enemies depend on miasma size (spawning uses halfCols/halfRows)
   state.enemies = enemies.initEnemies(state.miasma, config.enemies);
   state.enemyProjectiles.length = 0;
   enemies.spawnInitialEnemies(state, config.enemies.max);
+
+  // HUD
   hud.initHUD(state, config.hud);
 }
+
 
 
 // ---- Init ----
@@ -158,7 +168,9 @@ function update(dt) {
   state.drillDidHit = false;
     // --- Wind ---
   wind.updateWind(state.wind, dt, config.wind);
-
+if (state.miasmaEnabled) {
+  miasma.updateMiasma(state.miasma, state.wind, dt);
+}
 
   // movement
   let vx = 0, vy = 0;
@@ -194,7 +206,7 @@ if (state.activeWeapon === "drill" && state.drill && !state.drillOverheated) {
 
 
   if (state.miasmaEnabled) {
-    miasma.updateMiasma(state.miasma, state.time, dt);
+    miasma.updateMiasma(state.miasma, state.wind, dt);
   }
   enemies.updateEnemies(state, dt);
   pickups.updatePickups(state.pickups, state.camera, state.player, state, dt);

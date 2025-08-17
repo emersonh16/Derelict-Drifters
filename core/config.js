@@ -104,12 +104,14 @@ export const config = {
     bigShiftMagnitude: Math.PI / 2 // ~90° turn
   },
 
-  dynamicMiasma: {
-    tile: 14,          // px per tile
-    spawnProb: 0.2,    // base chance fog spawns on upwind edge
-    spawnJitter: 0.05, // +/- noise
-    bufferCols: 4,     // extra cols kept offscreen for smooth shift
-    bufferRows: 4
-  }
+dynamicMiasma: {
+  tile: 14,
+  cols: 450,
+  rows: 450,
+  spawnProb: 0.2,
+  spawnJitter: 0.05,
+  bufferCols: 4,
+  bufferRows: 4
+}
 
 };

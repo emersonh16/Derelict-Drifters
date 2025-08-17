@@ -66,7 +66,24 @@ export function initMiasma(cfg) {
     }
   }
 
-  return m;
+    return {
+    tile: cfg.tile,
+    cols,
+    rows,
+    halfCols: Math.floor(cols / 2),
+    halfRows: Math.floor(rows / 2),
+    stride: cols,
+    size,
+    tiles,
+    spawnProb: cfg.spawnProb,
+    bufferCols: cfg.bufferCols,
+    bufferRows: cfg.bufferRows,
+    offsetX: 0,
+    offsetY: 0,
+    accX: 0,
+    accY: 0,
+    dps: 35
+  };
 }
 
 
