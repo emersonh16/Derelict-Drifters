@@ -1,246 +1,178 @@
-
 // systems/miasma.js
-// Big miasma grid with crystal regrowth + beam clearing.
-// Laser uses a thick world-space ray (with a tiny fan) so it cleanly sweeps.
 /**
- * @typedef {import('../core/state.js').MiasmaState} MiasmaState
- * @typedef {import('../core/state.js').BeamState} BeamState
+ * Conveyor-belt style miasma grid.
+ * Tiles drift with wind; cleared tiles remain cleared.
  */
 
-export function initMiasma(opts = {}) {
-  const halfCols = Math.floor((opts.cols ?? 400) / 2);
-  const halfRows = Math.floor((opts.rows ?? 400) / 2);
-  const cols = halfCols * 2;
-  const rows = halfRows * 2;
+/**
+ * @typedef {Object} MiasmaState
+ * @property {number} tile
+ * @property {number} cols
+ * @property {number} rows
+ * @property {number} stride
+ * @property {number} size
+ * @property {Uint8Array} tiles
+ * @property {number} spawnProb
+ * @property {number} bufferCols
+ * @property {number} bufferRows
+ * @property {number} offsetX
+ * @property {number} offsetY
+ * @property {number} accX
+ * @property {number} accY
+ */
+
+/**
+ * Initialize miasma grid.
+ * @param {import("../core/config.js").config["dynamicMiasma"]} cfg
+ * @returns {MiasmaState}
+ */
+export function initMiasma(cfg) {
+  const cols = cfg.cols + cfg.bufferCols * 2;
+  const rows = cfg.rows + cfg.bufferRows * 2;
   const size = cols * rows;
 
-  /** @type {MiasmaState} */
-  const miasma = {
-    // grid
-    tile: opts.tile ?? 14,
-    halfCols, halfRows,
-    cols, rows,
+  const tiles = new Uint8Array(size);
+  for (let i = 0; i < size; i++) {
+    tiles[i] = Math.random() < cfg.spawnProb ? 1 : 0;
+  }
+
+  const m = {
+    tile: cfg.tile,
+    cols,
+    rows,
     stride: cols,
     size,
-
-    // double buffer (no per-tick allocations)
-    strength: new Uint8Array(size).fill(1),       // 1 = fog, 0 = clear
-    strengthNext: new Uint8Array(size).fill(1),
-
-    // regrowth
-    regrowDelay: opts.regrowDelay ?? 1.0,
-    baseChance:  opts.baseChance  ?? 0.20,
-    tickHz:      opts.tickHz      ?? 8,
-    lastCleared: new Float32Array(size).fill(-1e9),
-    _accum: 0,
-
-    // laser sweep tunables (on miasma for perf/caching)
-    laserMinThicknessTiles: opts.laserMinThicknessTiles ?? 2.0,
-    laserFanCount:          opts.laserFanCount          ?? 3,
-    laserFanMinDeg:         opts.laserFanMinDeg         ?? 0.25,
-
-    // NEW: damage per second when the player is in fog
-    dps: opts.dps ?? 35
-
+    tiles,
+    spawnProb: cfg.spawnProb,
+    bufferCols: cfg.bufferCols,
+    bufferRows: cfg.bufferRows,
+    offsetX: 0,
+    offsetY: 0,
+    accX: 0,
+    accY: 0
   };
-  return miasma;
-}
 
-export function updateMiasma(s, time, dt) {
-  if (!s) return;
-  s._accum += dt;
-  const step = 1 / s.tickHz;
-  while (s._accum >= step) {
-    s._accum -= step;
-    regrowStep(s, time);
+  // --- force clear a safe zone at center ---
+  const safeR = 10; // radius in tiles
+  const cx = Math.floor(cols / 2);
+  const cy = Math.floor(rows / 2);
+  for (let dy = -safeR; dy <= safeR; dy++) {
+    for (let dx = -safeR; dx <= safeR; dx++) {
+      const x = cx + dx;
+      const y = cy + dy;
+      if (x < 0 || x >= cols || y < 0 || y >= rows) continue;
+      const idx = y * cols + x;
+      tiles[idx] = 0; // clear
+    }
   }
+
+  return m;
 }
 
-export function drawMiasma(ctx, s, camera, cx, cy, w, h) {
-  if (!s) return;
-  const t = s.tile;
 
-  // visible world bounds
-  const leftW   = camera.x - w / 2;
-  const rightW  = camera.x + w / 2;
-  const topW    = camera.y - h / 2;
-  const bottomW = camera.y + h / 2;
 
-  // clamp to grid (grid coords centered on 0,0)
-  const minGX = Math.max(-s.halfCols, Math.floor(leftW  / t) - 1);
-  const maxGX = Math.min( s.halfCols, Math.ceil (rightW / t) + 1);
-  const minGY = Math.max(-s.halfRows, Math.floor(topW   / t) - 1);
-  const maxGY = Math.min( s.halfRows, Math.ceil (bottomW/ t) + 1);
+/**
+ * Update conveyor drift.
+ * @param {MiasmaState} m
+ * @param {import("./wind.js").WindState} wind
+ * @param {number} dt
+ */
+export function updateMiasma(m, wind, dt) {
+  // accumulate displacement
+  const move = wind.speed * dt;
+  m.accX += Math.cos(wind.direction) * move;
+  m.accY += Math.sin(wind.direction) * move;
 
-  ctx.save();
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.fillStyle = 'rgba(120, 60, 160, 0.50)';
-  ctx.beginPath();
+  // shift whole tiles
+  while (m.accX >= m.tile) { shift(m, -1, 0); m.accX -= m.tile; }
+  while (m.accX <= -m.tile) { shift(m, +1, 0); m.accX += m.tile; }
+  while (m.accY >= m.tile) { shift(m, 0, -1); m.accY -= m.tile; }
+  while (m.accY <= -m.tile) { shift(m, 0, +1); m.accY += m.tile; }
+}
 
-  // compute first screen row start, then increment by tile size
-  let sy = Math.floor(minGY * t - camera.y + cy);
-  for (let gy = minGY; gy < maxGY; gy++, sy += t) {
-    let sx = Math.floor(minGX * t - camera.x + cx);
-    for (let gx = minGX; gx < maxGX; gx++, sx += t) {
-      if (s.strength[idx(s, gx, gy)] === 1) {
-        ctx.rect(sx, sy, t, t);
+/**
+ * Shift the grid and respawn on upwind edge.
+ */
+function shift(m, dx, dy) {
+  const { cols, rows, tiles, spawnProb } = m;
+  if (dx) {
+    // column shift
+    for (let y = 0; y < rows; y++) {
+      if (dx > 0) {
+        // shift right → fill left col
+        for (let x = cols - 1; x > 0; x--) {
+          tiles[y * cols + x] = tiles[y * cols + x - 1];
+        }
+        tiles[y * cols] = Math.random() < spawnProb ? 1 : 0;
+      } else {
+        // shift left → fill right col
+        for (let x = 0; x < cols - 1; x++) {
+          tiles[y * cols + x] = tiles[y * cols + x + 1];
+        }
+        tiles[y * cols + (cols - 1)] = Math.random() < spawnProb ? 1 : 0;
       }
     }
   }
-
-  ctx.fill();
-  ctx.restore();
-}
-
-export function clearWithBeam(s, b, camera, time, cx, cy) {
-  if (!s || !b || b.mode === 'none') return;
-
-  const t = s.tile;
-  const playerWX = camera.x;
-  const playerWY = camera.y;
-  const now = time;
-
-  // -------- LASER: carve a thick, continuous ray (plus a tiny fan) --------
-  if (b.mode === 'laser') {
-    const core = (b.laserCoreWidth ?? 8);
-    const halo = core * (b.laserOutlineMult ?? 2.0);
-    const minThick = s.laserMinThicknessTiles * t;
-    const thickness = Math.max(minThick, core + halo);
-
-    const fan = Math.max(1, s.laserFanCount | 0);
-    const dAng = Math.max(toRad(s.laserFanMinDeg), b.halfArc * 0.5);
-    const start = b.angle - dAng * ((fan - 1) * 0.5);
-
-    for (let i = 0; i < fan; i++) {
-      const ang = start + i * dAng;
-      rayStampWorld(s, playerWX, playerWY, ang, b.range + t, thickness, now);
-    }
-    return;
-  }
-
-  // -------- BUBBLE & CONE: sector test on tile centers (dot product, no atan2) --------
-  const maxR2 = (b.range + t) ** 2;
-
-  const minGX = Math.floor((playerWX - b.range) / t);
-  const maxGX = Math.ceil ((playerWX + b.range) / t);
-  const minGY = Math.floor((playerWY - b.range) / t);
-  const maxGY = Math.ceil ((playerWY + b.range) / t);
-
-  // cache beam direction + cosine threshold
-  const bx = Math.cos(b.angle);
-  const by = Math.sin(b.angle);
-  const cosThresh = Math.cos(b.halfArc);
-
-  for (let gy = Math.max(minGY, -s.halfRows); gy <= Math.min(maxGY, s.halfRows - 1); gy++) {
-    for (let gx = Math.max(minGX, -s.halfCols); gx <= Math.min(maxGX, s.halfCols - 1); gx++) {
-      const wx = gx * t + t * 0.5;
-      const wy = gy * t + t * 0.5;
-      const dx = wx - playerWX, dy = wy - playerWY;
-      const r2 = dx*dx + dy*dy;
-      if (r2 > maxR2) continue;
-
-      if (b.mode === 'bubble') {
-        setCleared(s, gx, gy, now);
-        continue;
+  if (dy) {
+    // row shift
+    if (dy > 0) {
+      // shift down → fill top row
+      for (let y = rows - 1; y > 0; y--) {
+        for (let x = 0; x < cols; x++) {
+          tiles[y * cols + x] = tiles[(y - 1) * cols + x];
+        }
       }
-
-      // dot( norm(dx,dy), beamDir ) >= cos(halfArc)
-      const inv = r2 > 0 ? 1 / Math.sqrt(r2) : 0;
-      const dot = (dx * inv) * bx + (dy * inv) * by;
-      if (dot >= cosThresh) setCleared(s, gx, gy, now);
-    }
-  }
-}
-
-// ---------- Internals ----------
-function regrowStep(s, now) {
-  const prev = s.strength;
-  const next = s.strengthNext;
-
-  // copy current -> next (no new allocation)
-  next.set(prev);
-
-  const hc = s.halfCols, hr = s.halfRows;
-
-  for (let gy = -hr; gy < hr; gy++) {
-    const gyUpOK = (gy - 1) >= -hr;
-    const gyDnOK = (gy + 1) <  hr;
-    for (let gx = -hc; gx < hc; gx++) {
-      const i = idx(s, gx, gy);
-      if (prev[i] === 1) continue;                    // already fog
-      if ((now - s.lastCleared[i]) < s.regrowDelay) continue;
-
-      let adj = 0;
-      if (gx - 1 >= -hc && prev[idx(s, gx - 1, gy)] === 1) adj++;
-      if (gx + 1 <   hc && prev[idx(s, gx + 1, gy)] === 1) adj++;
-      if (gyUpOK        && prev[idx(s, gx, gy - 1)] === 1) adj++;
-      if (gyDnOK        && prev[idx(s, gx, gy + 1)] === 1) adj++;
-
-      if (adj > 0) {
-        const p = 1 - Math.pow(1 - s.baseChance, adj);
-        if (Math.random() < p) next[i] = 1;
+      for (let x = 0; x < cols; x++) {
+        tiles[x] = Math.random() < spawnProb ? 1 : 0;
       }
-    }
-  }
-
-  // swap buffers
-  s.strength = next;
-  s.strengthNext = prev;
-}
-
-// March a thick ray in WORLD space and clear tiles along it
-function rayStampWorld(s, oxW, oyW, ang, range, thickness, now) {
-  const t = s.tile;
-  const step = t; // tile-sized step (fan rays cover rotation gaps)
-  const cos = Math.cos(ang), sin = Math.sin(ang);
-  const r2 = (thickness * 0.5) ** 2;
-
-  for (let d = 0; d <= range; d += step) {
-    const pxW = oxW + cos * d;
-    const pyW = oyW + sin * d;
-
-    const minGX = Math.floor((pxW - thickness) / t);
-    const maxGX = Math.ceil ((pxW + thickness) / t);
-    const minGY = Math.floor((pyW - thickness) / t);
-    const maxGY = Math.ceil ((pyW + thickness) / t);
-
-    for (let gy = Math.max(minGY, -s.halfRows); gy <= Math.min(maxGY, s.halfRows - 1); gy++) {
-      const cyW = gy * t + t * 0.5;
-      for (let gx = Math.max(minGX, -s.halfCols); gx <= Math.min(maxGX, s.halfCols - 1); gx++) {
-        const cxW = gx * t + t * 0.5;
-        const dx = cxW - pxW, dy = cyW - pyW;
-        if (dx*dx + dy*dy <= r2) setCleared(s, gx, gy, now);
+    } else {
+      // shift up → fill bottom row
+      for (let y = 0; y < rows - 1; y++) {
+        for (let x = 0; x < cols; x++) {
+          tiles[y * cols + x] = tiles[(y + 1) * cols + x];
+        }
+      }
+      for (let x = 0; x < cols; x++) {
+        tiles[(rows - 1) * cols + x] = Math.random() < spawnProb ? 1 : 0;
       }
     }
   }
 }
 
-// ---- helpers ----
-function idx(s, gx, gy) {
-  const x = gx + s.halfCols;
-  const y = gy + s.halfRows;
-  return y * s.stride + x; // cached stride
+/**
+ * Draw miasma.
+ */
+export function drawMiasma(ctx, m, cam, cx, cy, w, h) {
+  ctx.fillStyle = "rgba(80,40,120,0.4)";
+  for (let y = 0; y < m.rows; y++) {
+    for (let x = 0; x < m.cols; x++) {
+      if (m.tiles[y * m.cols + x] === 1) {
+        const wx = x * m.tile - cam.x + cx;
+        const wy = y * m.tile - cam.y + cy;
+        ctx.fillRect(wx, wy, m.tile, m.tile);
+      }
+    }
+  }
 }
 
-function setCleared(s, gx, gy, now) {
-  const i = idx(s, gx, gy);
-  s.strength[i] = 0;
-  s.lastCleared[i] = now;
+export function worldToIdx(m, wx, wy) {
+  const cx = Math.floor(m.cols / 2);
+  const cy = Math.floor(m.rows / 2);
+
+  const x = Math.floor(wx / m.tile) + cx;
+  const y = Math.floor(wy / m.tile) + cy;
+
+  if (x < 0 || x >= m.cols || y < 0 || y >= m.rows) return -1;
+  return y * m.cols + x;
 }
 
-function toRad(deg){ return (deg * Math.PI)/180; }
 
-// --- external helpers for game logic ---
-// Convert world coords (wx, wy) to a strength[] index, or -1 if out of bounds
-export function worldToIdx(s, wx, wy) {
-  if (!s) return -1;
-  const gx = Math.floor(wx / s.tile);
-  const gy = Math.floor(wy / s.tile);
-  if (gx < -s.halfCols || gx >= s.halfCols || gy < -s.halfRows || gy >= s.halfRows) return -1;
-  return idx(s, gx, gy);
+export function isFog(m, idx) {
+  if (idx < 0 || idx >= m.size) return false;
+  return m.tiles[idx] === 1;
 }
 
-// Is this index fog (true) or clear (false)? Off-map counts as hazardous.
-export function isFog(s, i) {
-  return i < 0 ? true : s.strength[i] === 1;
+
+export function clearWithBeam(m, beam, camera, time, cx, cy) {
+  // No-op for now — real clearing comes in Step 4
 }

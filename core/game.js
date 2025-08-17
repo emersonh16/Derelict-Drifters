@@ -117,6 +117,7 @@ function startGame() {
 
   // player / run
   state.health = state.maxHealth;
+  console.log("spawn health", state.health, "max", state.maxHealth);
   state.scrap = 0;
   state.pickups.length = 0;
   state.camera.x = 0;
@@ -133,7 +134,7 @@ function startGame() {
 
 
   // world + systems (same order as first load)
-  state.miasma = miasma.initMiasma(config.miasma);                 // brand-new fog grid
+state.miasma = miasma.initMiasma(config.dynamicMiasma);
   const wInit = world.initWorld(state.miasma, state.player, config.world); // world depends on miasma size
   state.world = wInit.world;
   state.obstacleGrid = wInit.obstacleGrid;
@@ -233,6 +234,8 @@ if (state.activeWeapon === "drill" && state.drill && !state.drillOverheated) {
         if (miasma.isFog(state.miasma, idx)) { inFog = true; break; }
       }
     }
+    console.log("fog check", { inFog, cam: {x: state.camera.x, y: state.camera.y} });
+
     if (inFog) {
       state.health -= state.miasma.dps * dt;
       state.damageFlash = 0.2; // trigger red flash
@@ -243,10 +246,12 @@ if (state.activeWeapon === "drill" && state.drill && !state.drillOverheated) {
 
   state.damageFlash = Math.max(0, state.damageFlash - dt);
 
-  if (state.health <= 0 && !state.gameOver) {
-    state.health = 0;
-    state.gameOver = true;
-  }
+if (state.health <= 0 && !state.gameOver) {
+  console.log("health dropped", state.health);
+  state.health = 0;
+  state.gameOver = true;
+}
+
 
   // --- Laser energy drain/recharge ---
   const beamState = state.beam;
