@@ -3,7 +3,7 @@ import { config } from "../core/config.js";
 import { beam, miasma, enemies, pickups, world, drill, wind } from "../systems/index.js";
 import { hud, devhud } from "../ui/index.js";
 import { createGameState } from "./state.js";
-
+import { applyDevHUD } from "../ui/devhud.js";
 
 
 
@@ -75,10 +75,15 @@ window.addEventListener("keydown", (e) => {
 function togglePause() {
   state.paused = !state.paused;
   if (!state.paused) {
+    // commit DevHUD slider values into live state
+    applyDevHUD(state);
+
+    // sync mouse back to live
     state.mouse.x = state.pendingMouse.x;
     state.mouse.y = state.pendingMouse.y;
   }
 }
+
 
 window.addEventListener("keydown", (e) => {
   if (e.code === "Space") {

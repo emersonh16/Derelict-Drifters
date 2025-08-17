@@ -1,75 +1,107 @@
-// ui/devhud.js
-// Ultra-light Dev HUD: FPS + dt only, drawn at top-right.
-// Toggle with "P" (hooked up in core/game.js).
 /** @typedef {import('../core/state.js').GameState} GameState */
+
+let root, els = null;
 
 /** @param {GameState} state */
 export function initDevHUD(state) {
-  state.dev = state.dev || {};
-  state.dev.show = state.dev.show ?? false; // starts hidden
-  state.dev.perf = {
-    fps: 0,
-    frames: 0,
-    acc: 0,
-    sampleEvery: 0.5, // seconds; coarse = cheaper
-    dt: 0
+  root = document.createElement("div");
+  root.id = "devhud-root";
+  root.style.cssText = `
+    position:fixed;right:12px;top:12px;z-index:100;
+    background:rgba(0,0,0,0.6);color:#fff;
+    font:12px system-ui,sans-serif;
+    padding:8px;border-radius:8px;
+    pointer-events:auto;user-select:none;
+    display:none;
+  `;
+  document.body.appendChild(root);
+
+  root.innerHTML = `
+    <div style="margin-bottom:6px;font-weight:bold;">DevHUD</div>
+
+    <label>Mode:
+      <select id="dev-wind-mode">
+        <option value="auto">auto</option>
+        <option value="manual">manual</option>
+      </select>
+    </label><br><br>
+
+    <label>Direction:
+      <input type="range" id="dev-wind-dir" min="0" max="360" step="1">
+      <span id="dev-wind-dir-val"></span>
+    </label><br>
+
+    <label>Speed:
+      <input type="range" id="dev-wind-speed" min="0" max="10" step="0.1">
+      <span id="dev-wind-speed-val"></span>
+    </label><br><br>
+
+    <label>Fog spawn:
+      <input type="range" id="dev-fog-spawn" min="0" max="1" step="0.01">
+      <span id="dev-fog-spawn-val"></span>
+    </label>
+  `;
+
+  els = {
+    mode: root.querySelector("#dev-wind-mode"),
+    dir: root.querySelector("#dev-wind-dir"),
+    dirVal: root.querySelector("#dev-wind-dir-val"),
+    speed: root.querySelector("#dev-wind-speed"),
+    speedVal: root.querySelector("#dev-wind-speed-val"),
+    spawn: root.querySelector("#dev-fog-spawn"),
+    spawnVal: root.querySelector("#dev-fog-spawn-val"),
   };
+
+  updateDevHUD(state, 0);
 }
 
-/** @param {GameState} state */
+/** Toggle visibility */
 export function toggleDevHUD(state) {
-  state.dev = state.dev || {};
-  state.dev.show = !state.dev.show;
+  if (!root) return;
+  root.style.display = (root.style.display === "none") ? "block" : "none";
 }
 
 /** @param {GameState} state */
-export function updateDevHUD(state, dt) {
-  const p = state.dev?.perf;
-  if (!p) return;
+export function updateDevHUD(state, dt = 0) {
+  if (!els || !state.wind || !state.miasma) return;
 
-  p.dt = dt;
-  p.frames += 1;
-  p.acc += dt;
+  // only live-update when paused
+  if (!state.paused) return;
 
-  if (p.acc >= p.sampleEvery) {
-    p.fps = Math.round(p.frames / p.acc);
-    p.frames = 0;
-    p.acc = 0;
-  }
+  els.mode.value = state.wind.mode;
+
+  // direction degrees
+  const deg = (state.wind.direction * 180 / Math.PI) % 360;
+  els.dir.value = Math.round(deg);
+  els.dirVal.textContent = els.dir.value + "°";
+
+  // speed
+  els.speed.value = state.wind.speed.toFixed(1);
+  els.speedVal.textContent = els.speed.value;
+
+  // fog
+  els.spawn.value = state.miasma.spawnProb.toFixed(2);
+  els.spawnVal.textContent = els.spawn.value;
 }
 
-/** @param {GameState} state */
+/** Commit values back when unpausing */
+export function applyDevHUD(state) {
+  if (!els || !state.wind || !state.miasma) return;
+
+  state.wind.mode = els.mode.value;
+  const dirRad = (parseFloat(els.dir.value) || 0) * Math.PI / 180;
+  state.wind.direction = dirRad;
+  state.wind.targetDir = dirRad;
+
+  const spd = parseFloat(els.speed.value) || 0;
+  state.wind.speed = spd;
+  state.wind.targetSpeed = spd;
+
+  const fog = parseFloat(els.spawn.value) || 0;
+  state.miasma.spawnProb = fog;
+}
+
+/** @param {CanvasRenderingContext2D} ctx @param {GameState} state */
 export function drawDevHUD(ctx, state) {
-  const dev = state?.dev;
-  if (!dev?.show) return;
-
-  // If perf is missing for any reason, create a safe default on the fly
-  dev.perf = dev.perf || { fps: 0, frames: 0, acc: 0, sampleEvery: 0.5, dt: 0 };
-  const p = dev.perf;
-
-  const lines = [
-    "DEV (P toggles)",
-    `FPS: ${p.fps ?? 0}`,
-    `dt:  ${(p.dt ?? 0).toFixed ? p.dt.toFixed(3) : p.dt}s`,
-  ];
-
-  const pad = 8, lineH = 16, w = 200, h = pad * 2 + lines.length * lineH;
-  const x = ctx.canvas.width - w - 10;
-  const y = 10;
-
-  ctx.save();
-  ctx.globalAlpha = 0.85; ctx.fillStyle = "#0d0c12";
-  ctx.fillRect(x, y, w, h);
-  ctx.restore();
-
-  ctx.strokeStyle = "rgba(140,120,200,0.8)";
-  ctx.lineWidth = 2; ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-
-  ctx.font = "12px monospace"; ctx.textBaseline = "top";
-  for (let i = 0; i < lines.length; i++) {
-    const text = lines[i];
-    ctx.fillStyle = "rgba(0,0,0,0.9)"; ctx.fillText(text, x + pad + 1, y + pad + i * lineH + 1);
-    ctx.fillStyle = i === 0 ? "#c7b5ff" : "#e6e6e6"; ctx.fillText(text, x + pad, y + pad + i * lineH);
-  }
+  // nothing fancy; DOM already handles it
 }
-
