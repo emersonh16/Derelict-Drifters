@@ -245,7 +245,13 @@ if (state.activeWeapon === "drill" && state.drill && !state.drillOverheated) {
     for (let dy = -state.player.r; dy <= state.player.r && !inFog; dy += step) {
       for (let dx = -state.player.r; dx <= state.player.r; dx += step) {
         if (dx*dx + dy*dy > state.player.r * state.player.r) continue;
-        const idx = miasma.worldToIdx(state.miasma, state.camera.x + dx, state.camera.y + dy);
+       const idx = miasma.worldToIdx(
+  state.miasma,
+  state.camera.x + dx,
+  state.camera.y + dy,
+  state.camera              // <-- pass camera
+);
+
         if (miasma.isFog(state.miasma, idx)) { inFog = true; break; }
       }
     }

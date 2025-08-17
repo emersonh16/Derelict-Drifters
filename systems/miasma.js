@@ -73,7 +73,8 @@ console.log("[miasma] debug spawn → fog tiles:", fogCount, "of", tiles.length)
     bufferRows: cfg.bufferRows,
     offsetX: 0,
     offsetY: 0,
-    dps: 35
+    dps: 35,
+    angle: 0,
   };
 }
 
@@ -92,11 +93,15 @@ export function updateMiasma(m, wind, dt) {
   m.offsetY += Math.sin(wind.direction) * move;
 
   // shift whole tiles
- while (m.offsetX >= m.tile) { shift(m, -1, 0); }
+  while (m.offsetX >= m.tile) { shift(m, -1, 0); }
   while (m.offsetX <= -m.tile) { shift(m, +1, 0); }
   while (m.offsetY >= m.tile) { shift(m, 0, -1); }
   while (m.offsetY <= -m.tile) { shift(m, 0, +1); }
+
+  // NEW: lock visual rotation to wind
+  m.angle = wind.direction;
 }
+
 
 /**
  * Shift the grid and respawn on upwind edge.
@@ -153,21 +158,28 @@ function shift(m, dx, dy) {
  * Draw miasma.
  */
 export function drawMiasma(ctx, m, cam, cx, cy, w, h) {
-  // Solid color while testing; switch back to rgba(...,0.4) later if you want
+  // Bright + solid while testing; switch back to translucent later if you want
   ctx.fillStyle = "rgba(180,120,255,1.0)";
 
   const t = m.tile;
   const cxTiles = Math.floor(m.cols / 2);
   const cyTiles = Math.floor(m.rows / 2);
 
-  // Use the SAME quantized sub-tile remainder everywhere
+  // Quantized sub-tile drift (no shimmer)
   const subX = ((m.offsetX % t) + t) % t;
   const subY = ((m.offsetY % t) + t) % t;
   const ox = Math.round(subX);
   const oy = Math.round(subY);
 
+  // World origin of grid BEFORE rotation
   const originX = -cxTiles * t + ox;
   const originY = -cyTiles * t + oy;
+
+  // Rotate around player (screen center)
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(m.angle);
+  ctx.translate(-cx, -cy);
 
   for (let y = 0; y < m.rows; y++) {
     const wy = ((originY + y * t - cam.y + cy) | 0);  // integer pixel
@@ -177,31 +189,44 @@ export function drawMiasma(ctx, m, cam, cx, cy, w, h) {
       ctx.fillRect(wx, wy, t, t);
     }
   }
+
+  ctx.restore();
 }
 
 
 
 
 
-export function worldToIdx(m, wx, wy) {
+export function worldToIdx(m, wx, wy, camera) {
   const t = m.tile;
-  const cxTiles = Math.floor(m.cols / 2);
-  const cyTiles = Math.floor(m.rows / 2);
+  const cols = m.cols, rows = m.rows;
+  const cxTiles = Math.floor(cols / 2);
+  const cyTiles = Math.floor(rows / 2);
 
+  // Same quantized origin as draw
   const subX = ((m.offsetX % t) + t) % t;
   const subY = ((m.offsetY % t) + t) % t;
   const ox = Math.round(subX);
   const oy = Math.round(subY);
-
   const originX = -cxTiles * t + ox;
   const originY = -cyTiles * t + oy;
 
-  const x = Math.floor((wx - originX) / t);
-  const y = Math.floor((wy - originY) / t);
+  // Inverse-rotate the world point around the player to grid space
+  const a = -m.angle;
+  const ca = Math.cos(a), sa = Math.sin(a);
+  const px = camera.x, py = camera.y;       // rotate around player (camera center)
+  const dx = wx - px, dy = wy - py;
+  const gx = px + (dx * ca - dy * sa);
+  const gy = py + (dx * sa + dy * ca);
 
-  if (x < 0 || x >= m.cols || y < 0 || y >= m.rows) return -1;
-  return y * m.cols + x;
+  // Convert to tile coords
+  const x = Math.floor((gx - originX) / t);
+  const y = Math.floor((gy - originY) / t);
+
+  if (x < 0 || x >= cols || y < 0 || y >= rows) return -1;
+  return y * cols + x;
 }
+
 
 
 
@@ -214,35 +239,31 @@ export function isFog(m, idx) {
 // Clear tiles intersecting the beam shape.
 // Origin is the player's world position (camera center).
 export function clearWithBeam(m, beamState, camera, time, cx, cy) {
-  // --- Read beam params we need ---
-  const mode     = beamState.mode;        // "bubble" | "cone" | "laser"
-  const angle    = beamState.angle;       // radians
-  const halfArc  = beamState.halfArc;     // radians
+  const mode     = beamState.mode;                    // "bubble" | "cone" | "laser"
+  const angleW   = beamState.angle;                   // world angle (radians)
+  const halfArc  = beamState.halfArc;
   const maxRange = mode === "bubble" ? (beamState.radius || 0) : (beamState.range || 0);
   if (!maxRange || maxRange <= 0) return;
 
-  // --- Player world position (beam origin) ---
-  const wx0 = camera.x;
-  const wy0 = camera.y;
-
-  // --- Grid basics ---
-  const t = m.tile;
-  const cols = m.cols;
-  const rows = m.rows;
-  const cxTiles = Math.floor(cols / 2);
-  const cyTiles = Math.floor(rows / 2);
-
-  // --- Use the SAME quantized origin as draw() to avoid mismatch/jitter ---
-  const subX = ((m.offsetX % t) + t) % t;
-  const subY = ((m.offsetY % t) + t) % t;
-  const ox = Math.round(subX);
-  const oy = Math.round(subY);
-  const originX = -cxTiles * t + ox;   // world-space of grid (0,0) tile
+  // Grid + origin (same as draw)
+  const t = m.tile, cols = m.cols, rows = m.rows;
+  const cxTiles = Math.floor(cols / 2), cyTiles = Math.floor(rows / 2);
+  const subX = ((m.offsetX % t) + t) % t, subY = ((m.offsetY % t) + t) % t;
+  const ox = Math.round(subX), oy = Math.round(subY);
+  const originX = -cxTiles * t + ox;
   const originY = -cyTiles * t + oy;
 
-  // --- Convert player to tile coords and bound scan to a small box ---
-  const ix0 = Math.floor((wx0 - originX) / t);
-  const iy0 = Math.floor((wy0 - originY) / t);
+  // Player in world
+  const px = camera.x, py = camera.y;
+
+  // Work in grid space: inverse-rotate the beam and vectors
+  const aInv = -m.angle;
+  const ca = Math.cos(aInv), sa = Math.sin(aInv);
+  const angleGrid = angleW + aInv; // rotate beam angle into grid space
+
+  // Player tile
+  const ix0 = Math.floor((px - originX) / t);
+  const iy0 = Math.floor((py - originY) / t);
   const rTiles = Math.ceil(maxRange / t) + 1;
 
   const minY = Math.max(0, iy0 - rTiles);
@@ -250,7 +271,6 @@ export function clearWithBeam(m, beamState, camera, time, cx, cy) {
   const minX = Math.max(0, ix0 - rTiles);
   const maxX = Math.min(cols - 1, ix0 + rTiles);
 
-  // Small helper: smallest signed angle difference (-PI..PI), absolute value
   const angDiff = (a, b) => {
     let d = a - b;
     while (d >  Math.PI) d -= Math.PI * 2;
@@ -258,30 +278,30 @@ export function clearWithBeam(m, beamState, camera, time, cx, cy) {
     return Math.abs(d);
   };
 
-  // --- Scan local tiles and clear those inside the beam shape ---
   for (let iy = minY; iy <= maxY; iy++) {
-    const wy = originY + iy * t + t * 0.5;       // tile center (world y)
-    const dy = wy - wy0;
-
+    const wy = originY + iy * t + t * 0.5;
     for (let ix = minX; ix <= maxX; ix++) {
       const idx = iy * cols + ix;
-      if (m.tiles[idx] === 0) continue;          // already clear
+      if (m.tiles[idx] === 0) continue;
 
-      const wx = originX + ix * t + t * 0.5;     // tile center (world x)
-      const dx = wx - wx0;
+      const wx = originX + ix * t + t * 0.5;
 
-      const dist = Math.hypot(dx, dy);
-      if (dist > maxRange) continue;             // outside beam length
+      // Vector from player to tile center in WORLD...
+      const dxW = wx - px, dyW = wy - py;
+      // ...then inverse-rotate into GRID space
+      const gx = dxW * ca - dyW * sa;
+      const gy = dxW * sa + dyW * ca;
+
+      const dist = Math.hypot(gx, gy);
+      if (dist > maxRange) continue;
 
       if (mode === "bubble") {
-        // Circle around player
         m.tiles[idx] = 0;
         continue;
       }
 
-      // Cone / Laser: must also be within angular arc
-      const a = Math.atan2(dy, dx);
-      if (angDiff(a, angle) <= halfArc) {
+      const aTile = Math.atan2(gy, gx);
+      if (angDiff(aTile, angleGrid) <= halfArc) {
         m.tiles[idx] = 0;
       }
     }
