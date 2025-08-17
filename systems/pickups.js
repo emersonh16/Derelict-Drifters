@@ -1,5 +1,6 @@
 // systems/pickups.js
 /** @typedef {import('../core/state.js').Pickup} Pickup */
+import { worldToScreenIso } from "../core/iso.js";
 
 export function spawnPickup(pickups, x, y, type = "scrap") {
   pickups.push({ x, y, type, r: 6 });
@@ -25,14 +26,10 @@ export function updatePickups(pickups, camera, player, state, dt) {
 }
 
 export function drawPickups(ctx, pickups, camera, cx, cy) {
-  const px = camera.x;
-  const py = camera.y;
-
   for (const p of pickups) {
-    const sx = p.x - px + cx;
-    const sy = p.y - py + cy;
+    const { x: dx, y: dy } = worldToScreenIso(p.x, p.y, camera);
     ctx.beginPath();
-    ctx.arc(sx, sy, p.r, 0, Math.PI * 2);
+    ctx.arc(cx + dx, cy + dy, p.r, 0, Math.PI * 2);
     ctx.fillStyle = (p.type === "scrap") ? "#ff0" : "#0f0";
     ctx.fill();
     ctx.strokeStyle = "#fff";

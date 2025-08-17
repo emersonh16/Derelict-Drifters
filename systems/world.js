@@ -1,6 +1,7 @@
 // systems/world.js
 /** @typedef {import('../core/state.js').MiasmaState} MiasmaState */
 /** @typedef {import('../core/state.js').WorldState} WorldState */
+import { worldToScreenIso } from "../core/iso.js";
 
 export function initWorld(miasma, player, opts = {}) {
   const t = miasma.tile;
@@ -115,27 +116,31 @@ export function drawWorldBorder(ctx, world, camera, cx, cy) {
   ctx.save();
   ctx.fillStyle = color;
 
+  const top = worldToScreenIso(world.minX - thickness, world.minY - thickness, camera);
   ctx.fillRect(
-    world.minX - camera.x + cx - thickness,
-    world.minY - thickness - camera.y + cy,
+    cx + top.x,
+    cy + top.y,
     (world.maxX - world.minX) + thickness * 2,
     thickness
   );
+  const bottom = worldToScreenIso(world.minX - thickness, world.maxY, camera);
   ctx.fillRect(
-    world.minX - camera.x + cx - thickness,
-    world.maxY - camera.y + cy,
+    cx + bottom.x,
+    cy + bottom.y,
     (world.maxX - world.minX) + thickness * 2,
     thickness
   );
+  const left = worldToScreenIso(world.minX - thickness, world.minY, camera);
   ctx.fillRect(
-    world.minX - thickness - camera.x + cx,
-    world.minY - camera.y + cy,
+    cx + left.x,
+    cy + left.y,
     thickness,
     (world.maxY - world.minY)
   );
+  const right = worldToScreenIso(world.maxX, world.minY, camera);
   ctx.fillRect(
-    world.maxX - camera.x + cx,
-    world.minY - camera.y + cy,
+    cx + right.x,
+    cy + right.y,
     thickness,
     (world.maxY - world.minY)
   );
@@ -148,8 +153,6 @@ export function drawObstacles(ctx, miasma, obstacleGrid, camera, cx, cy) {
   const t = miasma.tile;
   const cols = miasma.cols;
   const rows = miasma.rows;
-  const px = camera.x;
-  const py = camera.y;
 
   ctx.save();
   ctx.fillStyle = "#444";
@@ -160,7 +163,8 @@ export function drawObstacles(ctx, miasma, obstacleGrid, camera, cx, cy) {
       if (obstacleGrid[idx] === 1) {
         const x = col * t - miasma.halfCols * t;
         const y = row * t - miasma.halfRows * t;
-        ctx.fillRect(x - px + cx, y - py + cy, t, t);
+        const { x: dx, y: dy } = worldToScreenIso(x, y, camera);
+        ctx.fillRect(cx + dx, cy + dy, t, t);
       }
     }
   }

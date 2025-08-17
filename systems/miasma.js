@@ -6,6 +6,7 @@
  * @typedef {import('../core/state.js').MiasmaState} MiasmaState
  * @typedef {import('../core/state.js').BeamState} BeamState
  */
+import { worldToScreenIso } from "../core/iso.js";
 
 export function initMiasma(opts = {}) {
   const halfCols = Math.floor((opts.cols ?? 400) / 2);
@@ -77,13 +78,13 @@ export function drawMiasma(ctx, s, camera, cx, cy, w, h) {
   ctx.fillStyle = 'rgba(120, 60, 160, 0.50)';
   ctx.beginPath();
 
-  // compute first screen row start, then increment by tile size
-  let sy = Math.floor(minGY * t - camera.y + cy);
-  for (let gy = minGY; gy < maxGY; gy++, sy += t) {
-    let sx = Math.floor(minGX * t - camera.x + cx);
-    for (let gx = minGX; gx < maxGX; gx++, sx += t) {
+  for (let gy = minGY; gy < maxGY; gy++) {
+    for (let gx = minGX; gx < maxGX; gx++) {
       if (s.strength[idx(s, gx, gy)] === 1) {
-        ctx.rect(sx, sy, t, t);
+        const wx = gx * t;
+        const wy = gy * t;
+        const { x: dx, y: dy } = worldToScreenIso(wx, wy, camera);
+        ctx.rect(cx + dx, cy + dy, t, t);
       }
     }
   }

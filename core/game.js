@@ -1,5 +1,6 @@
 // core/game.js
 import { config } from "../core/config.js";
+import { worldToScreenIso, screenToWorldIso } from "./iso.js";
 import { beam, miasma, enemies, pickups, world, drill } from "../systems/index.js";
 import { hud, devhud } from "../ui/index.js";
 import { createGameState } from "./state.js";
@@ -9,6 +10,9 @@ import { createGameState } from "./state.js";
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d", { alpha: false });
+
+config.game.tileW = 32;
+config.game.tileH = 16;
 
 const state = createGameState();
 state.maxScrap = config.game.winScrap;
