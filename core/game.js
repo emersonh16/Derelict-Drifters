@@ -155,6 +155,9 @@ devhud.initDevHUD(state);
 function update(dt) {
   state.time += dt;
   state.drillDidHit = false;
+    // --- Wind ---
+  wind.updateWind(state.wind, dt, config.wind);
+
 
   // movement
   let vx = 0, vy = 0;
