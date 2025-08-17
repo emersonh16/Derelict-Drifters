@@ -153,26 +153,27 @@ function shift(m, dx, dy) {
  * Draw miasma.
  */
 export function drawMiasma(ctx, m, cam, cx, cy, w, h) {
-ctx.fillStyle = "rgba(180,120,255,1.0)"; // DEBUG: bright, opaque
-
+  // Solid color while testing; switch back to rgba(...,0.4) later if you want
+  ctx.fillStyle = "rgba(180,120,255,1.0)";
 
   const t = m.tile;
   const cxTiles = Math.floor(m.cols / 2);
   const cyTiles = Math.floor(m.rows / 2);
 
-  // Keep sub-tile offsets positive so negative drift doesn’t cause slips
-  const ox = ((m.offsetX % t) + t) % t;
-  const oy = ((m.offsetY % t) + t) % t;
+  // Use the SAME quantized sub-tile remainder everywhere
+  const subX = ((m.offsetX % t) + t) % t;
+  const subY = ((m.offsetY % t) + t) % t;
+  const ox = Math.round(subX);
+  const oy = Math.round(subY);
 
-  // World origin of the grid (with sub-tile drift applied once)
   const originX = -cxTiles * t + ox;
   const originY = -cyTiles * t + oy;
 
   for (let y = 0; y < m.rows; y++) {
-    const wy = originY + y * t - cam.y + cy;
+    const wy = ((originY + y * t - cam.y + cy) | 0);  // integer pixel
     for (let x = 0; x < m.cols; x++) {
-      if (m.tiles[y * m.cols + x] !== 1) continue; // only draw fog tiles
-      const wx = originX + x * t - cam.x + cx;
+      if (m.tiles[y * m.cols + x] !== 1) continue;
+      const wx = ((originX + x * t - cam.x + cx) | 0); // integer pixel
       ctx.fillRect(wx, wy, t, t);
     }
   }
@@ -181,17 +182,22 @@ ctx.fillStyle = "rgba(180,120,255,1.0)"; // DEBUG: bright, opaque
 
 
 
+
 export function worldToIdx(m, wx, wy) {
+  const t = m.tile;
   const cxTiles = Math.floor(m.cols / 2);
   const cyTiles = Math.floor(m.rows / 2);
 
-  // Grid origin INCLUDING drift (offsetX/offsetY)
-  const originX = -cxTiles * m.tile + m.offsetX;
-  const originY = -cyTiles * m.tile + m.offsetY;
+  const subX = ((m.offsetX % t) + t) % t;
+  const subY = ((m.offsetY % t) + t) % t;
+  const ox = Math.round(subX);
+  const oy = Math.round(subY);
 
-  // Convert world → grid tile coordinates
-  const x = Math.floor((wx - originX) / m.tile);
-  const y = Math.floor((wy - originY) / m.tile);
+  const originX = -cxTiles * t + ox;
+  const originY = -cyTiles * t + oy;
+
+  const x = Math.floor((wx - originX) / t);
+  const y = Math.floor((wy - originY) / t);
 
   if (x < 0 || x >= m.cols || y < 0 || y >= m.rows) return -1;
   return y * m.cols + x;
@@ -208,33 +214,43 @@ export function isFog(m, idx) {
 // Clear tiles intersecting the beam shape.
 // Origin is the player's world position (camera center).
 export function clearWithBeam(m, beamState, camera, time, cx, cy) {
-  // Read beam params we need
+  // --- Read beam params we need ---
   const mode     = beamState.mode;        // "bubble" | "cone" | "laser"
   const angle    = beamState.angle;       // radians
   const halfArc  = beamState.halfArc;     // radians
   const maxRange = mode === "bubble" ? (beamState.radius || 0) : (beamState.range || 0);
   if (!maxRange || maxRange <= 0) return;
 
-  // World origin (player)
+  // --- Player world position (beam origin) ---
   const wx0 = camera.x;
   const wy0 = camera.y;
 
-  // Center tile (grid is centered at world 0,0)
-  const cxTiles = Math.floor(m.cols / 2);
-  const cyTiles = Math.floor(m.rows / 2);
+  // --- Grid basics ---
+  const t = m.tile;
+  const cols = m.cols;
+  const rows = m.rows;
+  const cxTiles = Math.floor(cols / 2);
+  const cyTiles = Math.floor(rows / 2);
 
-  // Tile index of the player's world position
-  const ix0 = Math.floor(wx0 / m.tile) + cxTiles;
-  const iy0 = Math.floor(wy0 / m.tile) + cyTiles;
+  // --- Use the SAME quantized origin as draw() to avoid mismatch/jitter ---
+  const subX = ((m.offsetX % t) + t) % t;
+  const subY = ((m.offsetY % t) + t) % t;
+  const ox = Math.round(subX);
+  const oy = Math.round(subY);
+  const originX = -cxTiles * t + ox;   // world-space of grid (0,0) tile
+  const originY = -cyTiles * t + oy;
 
-  // Range in tiles
-  const rTiles = Math.ceil(maxRange / m.tile);
+  // --- Convert player to tile coords and bound scan to a small box ---
+  const ix0 = Math.floor((wx0 - originX) / t);
+  const iy0 = Math.floor((wy0 - originY) / t);
+  const rTiles = Math.ceil(maxRange / t) + 1;
 
-  // World-space origin of the grid (to compute tile centers)
-  const originX = -cxTiles * m.tile + m.offsetX;
-  const originY = -cyTiles * m.tile + m.offsetY;
+  const minY = Math.max(0, iy0 - rTiles);
+  const maxY = Math.min(rows - 1, iy0 + rTiles);
+  const minX = Math.max(0, ix0 - rTiles);
+  const maxX = Math.min(cols - 1, ix0 + rTiles);
 
-  // Helper: smallest signed angle difference (-PI..PI)
+  // Small helper: smallest signed angle difference (-PI..PI), absolute value
   const angDiff = (a, b) => {
     let d = a - b;
     while (d >  Math.PI) d -= Math.PI * 2;
@@ -242,40 +258,31 @@ export function clearWithBeam(m, beamState, camera, time, cx, cy) {
     return Math.abs(d);
   };
 
-  const cols = m.cols, rows = m.rows, tiles = m.tiles, t = m.tile;
-
-  // Scan only the local bounding box around the player
-  const minY = Math.max(0, iy0 - rTiles);
-  const maxY = Math.min(rows - 1, iy0 + rTiles);
-  const minX = Math.max(0, ix0 - rTiles);
-  const maxX = Math.min(cols - 1, ix0 + rTiles);
-
+  // --- Scan local tiles and clear those inside the beam shape ---
   for (let iy = minY; iy <= maxY; iy++) {
-    // y center of this tile in world coords
-    const wy = originY + iy * t + t * 0.5;
+    const wy = originY + iy * t + t * 0.5;       // tile center (world y)
     const dy = wy - wy0;
 
     for (let ix = minX; ix <= maxX; ix++) {
       const idx = iy * cols + ix;
-      if (tiles[idx] === 0) continue; // already clear
+      if (m.tiles[idx] === 0) continue;          // already clear
 
-      // x center of this tile in world coords
-      const wx = originX + ix * t + t * 0.5;
+      const wx = originX + ix * t + t * 0.5;     // tile center (world x)
       const dx = wx - wx0;
 
       const dist = Math.hypot(dx, dy);
-      if (dist > maxRange) continue; // outside reach
+      if (dist > maxRange) continue;             // outside beam length
 
       if (mode === "bubble") {
-        // simple circle
-        tiles[idx] = 0;
+        // Circle around player
+        m.tiles[idx] = 0;
         continue;
       }
 
-      // cone/laser: also require angle within halfArc
+      // Cone / Laser: must also be within angular arc
       const a = Math.atan2(dy, dx);
       if (angDiff(a, angle) <= halfArc) {
-        tiles[idx] = 0;
+        m.tiles[idx] = 0;
       }
     }
   }
