@@ -95,23 +95,23 @@ export const config = {
     heatColorHot: '#ff3333'
   },
 
-  // --- New dynamic systems ---
-  wind: {
-    minSpeed: 0.5,         // tiles/sec
-    maxSpeed: 3.0,         // tiles/sec
-    smoothTime: 5.0,       // sec to lerp toward target
-    bigShiftInterval: 60,  // sec between major shifts
-    bigShiftMagnitude: Math.PI / 2 // ~90° turn
-  },
+wind: {
+  minSpeed: 0,             // was 0.5
+  maxSpeed: 80,            // was 3
+  smoothTime: 0.9,         // was 5 (snappier response to targets)
+  smallJitter: 0.05,     // rad/s of small random drift
+  bigShiftInterval: 10,  // sec between major shifts
+  bigShiftMagnitude: Math.PI // up to 180° turn
+},
 
 dynamicMiasma: {
-  tile: 5,      // was 14
-  cols: 450,
-  rows: 450,
-  spawnProb: 0.2,
-  spawnJitter: 0.05,
-  bufferCols: 4,
+  tile: 14,        // size of each fog tile in pixels (chunkier = faster to draw)
+  cols: 200,       // number of tiles across (keeps total draw calls reasonable)
+  rows: 200,       // number of tiles down
+  spawnProb: 0.5,  // 50% chance a tile starts as fog (makes it obvious)
+  spawnJitter: 0.00, // small randomness so respawn edges look noisy
+  bufferCols: 4,   // off-screen padding for scrolling
   bufferRows: 4
-}
+},
 
 };

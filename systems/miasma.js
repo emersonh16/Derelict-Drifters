@@ -49,6 +49,16 @@ export function initMiasma(cfg) {
     }
   }
 
+  // DEBUG: ensure there's plenty of fog to see (comment out later)
+let fogCount = 0;
+for (let i = 0; i < tiles.length; i++) {
+  // make ~70% of tiles fog so it's obvious
+  tiles[i] = Math.random() < 0.7 ? 1 : 0;
+  if (tiles[i] === 1) fogCount++;
+}
+console.log("[miasma] debug spawn → fog tiles:", fogCount, "of", tiles.length);
+
+
     return {
     tile: cfg.tile,
     cols,
@@ -143,21 +153,26 @@ function shift(m, dx, dy) {
  * Draw miasma.
  */
 export function drawMiasma(ctx, m, cam, cx, cy, w, h) {
-  ctx.fillStyle = "rgba(80,40,120,0.4)";
+ctx.fillStyle = "rgba(180,120,255,1.0)"; // DEBUG: bright, opaque
+
 
   const t = m.tile;
   const cxTiles = Math.floor(m.cols / 2);
   const cyTiles = Math.floor(m.rows / 2);
 
-  // use sub-tile remainder for smooth motion
-   const originX = -cxTiles * t + m.offsetX;
-  const originY = -cyTiles * t + m.offsetY;
+  // Keep sub-tile offsets positive so negative drift doesn’t cause slips
+  const ox = ((m.offsetX % t) + t) % t;
+  const oy = ((m.offsetY % t) + t) % t;
+
+  // World origin of the grid (with sub-tile drift applied once)
+  const originX = -cxTiles * t + ox;
+  const originY = -cyTiles * t + oy;
 
   for (let y = 0; y < m.rows; y++) {
-      const wy = originY + y * m.tile - cam.y + cy;
+    const wy = originY + y * t - cam.y + cy;
     for (let x = 0; x < m.cols; x++) {
-      if (m.tiles[y * m.cols + x] !== 1) continue;
-       const wx = originX + x * m.tile - cam.x + cx;
+      if (m.tiles[y * m.cols + x] !== 1) continue; // only draw fog tiles
+      const wx = originX + x * t - cam.x + cx;
       ctx.fillRect(wx, wy, t, t);
     }
   }
@@ -165,16 +180,23 @@ export function drawMiasma(ctx, m, cam, cx, cy, w, h) {
 
 
 
-export function worldToIdx(m, wx, wy) {
-  const cx = Math.floor(m.cols / 2);
-  const cy = Math.floor(m.rows / 2);
 
-  const x = Math.floor(wx / m.tile) + cx;
-  const y = Math.floor(wy / m.tile) + cy;
+export function worldToIdx(m, wx, wy) {
+  const cxTiles = Math.floor(m.cols / 2);
+  const cyTiles = Math.floor(m.rows / 2);
+
+  // Grid origin INCLUDING drift (offsetX/offsetY)
+  const originX = -cxTiles * m.tile + m.offsetX;
+  const originY = -cyTiles * m.tile + m.offsetY;
+
+  // Convert world → grid tile coordinates
+  const x = Math.floor((wx - originX) / m.tile);
+  const y = Math.floor((wy - originY) / m.tile);
 
   if (x < 0 || x >= m.cols || y < 0 || y >= m.rows) return -1;
   return y * m.cols + x;
 }
+
 
 
 export function isFog(m, idx) {
@@ -209,8 +231,8 @@ export function clearWithBeam(m, beamState, camera, time, cx, cy) {
   const rTiles = Math.ceil(maxRange / m.tile);
 
   // World-space origin of the grid (to compute tile centers)
-  const originX = -cxTiles * m.tile;
-  const originY = -cyTiles * m.tile;
+  const originX = -cxTiles * m.tile + m.offsetX;
+  const originY = -cyTiles * m.tile + m.offsetY;
 
   // Helper: smallest signed angle difference (-PI..PI)
   const angDiff = (a, b) => {

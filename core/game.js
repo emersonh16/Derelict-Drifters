@@ -249,7 +249,6 @@ if (state.activeWeapon === "drill" && state.drill && !state.drillOverheated) {
         if (miasma.isFog(state.miasma, idx)) { inFog = true; break; }
       }
     }
-    console.log("fog check", { inFog, cam: {x: state.camera.x, y: state.camera.y} });
 
     if (inFog) {
       state.health -= state.miasma.dps * dt;
