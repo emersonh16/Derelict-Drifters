@@ -60,23 +60,22 @@ console.log("[miasma] debug spawn → fog tiles:", fogCount, "of", tiles.length)
 
 
     return {
-    tile: cfg.tile,
-    cols,
-    rows,
-    halfCols: Math.floor(cols / 2),
-    halfRows: Math.floor(rows / 2),
-    stride: cols,
-    size,
-    tiles,
-    spawnProb: cfg.spawnProb,
-    bufferCols: cfg.bufferCols,
-    bufferRows: cfg.bufferRows,
-    offsetX: 0,
-    offsetY: 0,
-    dps: 35,
-    angle: 0,
-  };
-}
+      tile: cfg.tile,
+      cols,
+      rows,
+      halfCols: Math.floor(cols / 2),
+      halfRows: Math.floor(rows / 2),
+      stride: cols,
+      size,
+      tiles,
+      spawnProb: cfg.spawnProb,
+      bufferCols: cfg.bufferCols,
+      bufferRows: cfg.bufferRows,
+      offsetX: 0,
+      offsetY: 0,
+      angle: 0,
+    };
+  }
 
 
 

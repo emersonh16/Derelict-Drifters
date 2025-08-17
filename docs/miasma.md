@@ -44,6 +44,7 @@ dynamicMiasma: {
   rows: 161,       // tile count
   spawnProb: 0.20, // chance that a tile on the upwind edge is fog (0..1)
   spawnJitter: 0.05, // not yet used (reserved for future per-row noise)
+  dps: 35,         // damage per second while in fog
   bufferCols: 4,   // extra offscreen columns, for smoother shifts
   bufferRows: 4    // extra offscreen rows
 }

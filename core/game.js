@@ -257,7 +257,7 @@ if (state.activeWeapon === "drill" && state.drill && !state.drillOverheated) {
     }
 
     if (inFog) {
-      state.health -= state.miasma.dps * dt;
+      state.health -= config.dynamicMiasma.dps * dt;
       state.damageFlash = 0.2; // trigger red flash
       if (state.health < 0) state.health = 0;
     }
