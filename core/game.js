@@ -1,6 +1,6 @@
 // core/game.js
 import { config } from "../core/config.js";
-import { beam, miasma, enemies, pickups, world, drill } from "../systems/index.js";
+import { beam, miasma, enemies, pickups, world, drill, wind } from "../systems/index.js";
 import { hud, devhud } from "../ui/index.js";
 import { createGameState } from "./state.js";
 
@@ -14,6 +14,9 @@ ctx.imageSmoothingEnabled = false; // keeps pixels crisp (not required, but nice
 
 const state = createGameState();
 state.miasmaEnabled = true;
+state.wind.direction = wind.direction;
+state.wind.speed = wind.speed;
+state.wind.mode = wind.mode;
 state.maxScrap = config.game.winScrap;
 state.laserEnergy = state.maxLaserEnergy = config.game.maxLaserEnergy;
 state.drillHeat = 0;
@@ -99,6 +102,13 @@ window.addEventListener("keydown", (e) => {
 
 
 function startGame() {
+  wind.direction = 0;
+  wind.speed = 0;
+  wind.mode = 'steady';
+  state.wind.direction = 0;
+  state.wind.speed = 0;
+  state.wind.mode = 'steady';
+
   // base state
   state.miasmaEnabled = true;
   state.time = 0;
@@ -174,15 +184,16 @@ function update(dt) {
 
 
 // --- Drill carving using triangle hitbox ---
-if (state.activeWeapon === "drill" && state.drill && !state.drillOverheated) {
-  const tri = drill.getDrillTriangleWorld(state.drill, state.camera, state.mouse);
-  if (world.carveObstaclesWithDrillTri(state.miasma, state.obstacleGrid, tri, dt, 2)) {
-    state.drillDidHit = true;
+  if (state.activeWeapon === "drill" && state.drill && !state.drillOverheated) {
+    const tri = drill.getDrillTriangleWorld(state.drill, state.camera, state.mouse);
+    if (world.carveObstaclesWithDrillTri(state.miasma, state.obstacleGrid, tri, dt, 2)) {
+      state.drillDidHit = true;
+    }
   }
-}
-
-
-
+  wind.updateWind(dt);
+  state.wind.direction = wind.direction;
+  state.wind.speed = wind.speed;
+  state.wind.mode = wind.mode;
 
   if (state.miasmaEnabled) {
     miasma.updateMiasma(state.miasma, state.time, dt);

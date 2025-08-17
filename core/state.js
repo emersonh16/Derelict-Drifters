@@ -120,6 +120,13 @@
  */
 
 /**
+ * @typedef {Object} WindState
+ * @property {number} direction
+ * @property {number} speed
+ * @property {string} mode
+ */
+
+/**
  * @typedef {Object} GameState
  * @property {number} time
  * @property {number} dt
@@ -145,6 +152,7 @@
  * @property {boolean} drillOverheated
  * @property {number} drillCoolTimer
  * @property {boolean} drillDidHit
+ * @property {WindState} wind
  * @property {BeamState} [beam]
  * @property {MiasmaState} [miasma]
  * @property {EnemyState} [enemies]
@@ -185,6 +193,7 @@ export function createGameState() {
     drillCoolTimer: 0,
     drillDidHit: false,
     enemyProjectiles: [],
+    wind: { direction: 0, speed: 0, mode: 'steady' },
   };
 }
 
