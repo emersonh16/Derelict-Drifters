@@ -44,9 +44,6 @@ export const config = {
     tile: 5,
     cols: 450,
     rows: 450,
-    regrowDelay: 1.0,
-    baseChance: 0.20,
-    tickHz: 8,
 
     // Laser sweep tuning
     laserMinThicknessTiles: 2.0,

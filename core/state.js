@@ -38,20 +38,17 @@
  * @property {number} halfRows
  * @property {number} cols
  * @property {number} rows
- * @property {number} stride
- * @property {number} size
- * @property {Uint8Array} strength
- * @property {Uint8Array} strengthNext
- * @property {number} regrowDelay
- * @property {number} baseChance
- * @property {number} tickHz
- * @property {Float32Array} lastCleared
- * @property {number} _accum
+ * @property {Array<Array<boolean>>} tiles
+ * @property {number} originGX
+ * @property {number} originGY
+ * @property {number} _accumX
+ * @property {number} _accumY
  * @property {number} laserMinThicknessTiles
  * @property {number} laserFanCount
  * @property {number} laserFanMinDeg
  * @property {number} dps
- */
+ * @property {number} seed
+*/
 
 /**
  * @typedef {Object} EnemyProjectile
@@ -145,6 +142,7 @@
  * @property {boolean} drillOverheated
  * @property {number} drillCoolTimer
  * @property {boolean} drillDidHit
+ * @property {{direction:number,speed:number}} wind
  * @property {BeamState} [beam]
  * @property {MiasmaState} [miasma]
  * @property {EnemyState} [enemies]
@@ -185,6 +183,7 @@ export function createGameState() {
     drillCoolTimer: 0,
     drillDidHit: false,
     enemyProjectiles: [],
+    wind: { direction: 0, speed: 0 },
   };
 }
 
