@@ -160,17 +160,18 @@ export function updateEnemies(state, dt) {
     }
 
     // Drill damage if enemy overlaps the drill triangle
-    if (tri) {
+    if (tri && !state.drillOverheated) {
       // quick AABB reject
       if (
         m.x >= tri.aabb.minX && m.x <= tri.aabb.maxX &&
         m.y >= tri.aabb.minY && m.y <= tri.aabb.maxY
       ) {
-          if (pointInTriangle(m.x, m.y, tri.a, tri.b, tri.c)) {
+        if (pointInTriangle(m.x, m.y, tri.a, tri.b, tri.c)) {
           const dps = state.drill.dps ?? 180;
           m.hp -= dps * dt;
           m.flash = cfg.flashTime;
           if (m.hp < 0) m.hp = 0;
+          state.drillDidHit = true;
         }
       }
     }

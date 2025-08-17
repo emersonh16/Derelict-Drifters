@@ -81,5 +81,17 @@ export const config = {
     pad: 14,            // HUD padding from top/left
     fontSize: 12,       // HUD font size
     hpFillColor: '#ff5577cc' // health bar fill color
+  },
+
+  // Drill heat and HUD colors
+  drill: {
+    maxHeat: 100,
+    heatRate: 35,
+    coolRate: 35,
+    coolDelay: 0.5,
+    resumeThreshold: 33,
+    heatColorCold: '#22cc55',
+    heatColorWarm: '#ffcc33',
+    heatColorHot: '#ff3333'
   }
 };

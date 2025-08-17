@@ -140,6 +140,11 @@
  * @property {number} laserEnergy
  * @property {number} maxLaserEnergy
  * @property {"beam"|"drill"} activeWeapon
+ * @property {number} drillHeat
+ * @property {number} maxDrillHeat
+ * @property {boolean} drillOverheated
+ * @property {number} drillCoolTimer
+ * @property {boolean} drillDidHit
  * @property {BeamState} [beam]
  * @property {MiasmaState} [miasma]
  * @property {EnemyState} [enemies]
@@ -174,6 +179,11 @@ export function createGameState() {
     laserEnergy: 0,
     maxLaserEnergy: 0,
     activeWeapon: "beam",
+    drillHeat: 0,
+    maxDrillHeat: 0,
+    drillOverheated: false,
+    drillCoolTimer: 0,
+    drillDidHit: false,
     enemyProjectiles: [],
   };
 }

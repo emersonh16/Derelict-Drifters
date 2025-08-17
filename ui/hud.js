@@ -1,4 +1,5 @@
 /** @typedef {import('../core/state.js').GameState} GameState */
+import { config } from '../core/config.js';
 var els = null;
 
 /** @param {GameState} state */
@@ -29,10 +30,16 @@ export function initHUD(state, opts = {}) {
       `<div id="hud-hp-fill" style="position:absolute;left:0;top:0;bottom:0;width:0;background:${hpFillColor};"></div>` +
     `</div>` +
 
-    // New Laser Energy Bar
+    // Laser Energy Bar
+    `<div style="position:relative;width:${barW}px;height:${barH}px;border-radius:6px;` +
+      `background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);overflow:hidden;margin-bottom:4px;">` +
+      `<div id="hud-laser-fill" style="position:absolute;left:0;top:0;bottom:0;width:0;background:yellow;"></div>` +
+    `</div>` +
+
+    // Drill Heat Bar
     `<div style="position:relative;width:${barW}px;height:${barH}px;border-radius:6px;` +
       `background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);overflow:hidden;margin-bottom:8px;">` +
-      `<div id="hud-laser-fill" style="position:absolute;left:0;top:0;bottom:0;width:0;background:yellow;"></div>` +
+      `<div id="hud-heat-fill" style="position:absolute;left:0;top:0;bottom:0;width:0;background:${config.drill.heatColorCold};"></div>` +
     `</div>` +
 
     `<div>Scrap: <span id="hud-scrap-num"></span></div>`;
@@ -40,7 +47,8 @@ export function initHUD(state, opts = {}) {
   els = {
     hpNum:    root.querySelector('#hud-hp-num'),
     hpFill:   root.querySelector('#hud-hp-fill'),
-    laserFill: root.querySelector('#hud-laser-fill'), // NEW
+    laserFill: root.querySelector('#hud-laser-fill'),
+    heatFill: root.querySelector('#hud-heat-fill'),
     scrapNum: root.querySelector('#hud-scrap-num')
   };
 
@@ -65,6 +73,14 @@ export function updateHUD(state) {
   // --- Laser Energy ---
   var energyPct = Math.max(0, Math.min(1, state.laserEnergy / state.maxLaserEnergy));
   els.laserFill.style.width = (energyPct * 100).toFixed(1) + '%';
+
+  // --- Drill Heat ---
+  var heatPct = Math.max(0, Math.min(1, state.drillHeat / state.maxDrillHeat));
+  els.heatFill.style.width = (heatPct * 100).toFixed(1) + '%';
+  var heatColor = config.drill.heatColorCold;
+  if (heatPct > 0.66) heatColor = config.drill.heatColorHot;
+  else if (heatPct > 0.33) heatColor = config.drill.heatColorWarm;
+  els.heatFill.style.background = heatColor;
 
   // --- Scrap ---
   var scrap = Math.round((state && typeof state.scrap === 'number') ? state.scrap : 0);

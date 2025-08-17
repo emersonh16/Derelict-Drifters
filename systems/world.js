@@ -208,7 +208,7 @@ export function carveObstaclesWithDrillTri(miasma, obstacleGrid, tri, dt, pad = 
   const cols = miasma.cols;
   const rows = miasma.rows;
   const grid = obstacleGrid;
-  if (!grid) return;
+  if (!grid) return false;
 
   // AABB for quick bounds (pad=0 keeps it tight)
   const minCol = Math.max(0, Math.floor((tri.aabb.minX - pad + miasma.halfCols * t) / t));
@@ -216,6 +216,7 @@ export function carveObstaclesWithDrillTri(miasma, obstacleGrid, tri, dt, pad = 
   const minRow = Math.max(0, Math.floor((tri.aabb.minY - pad + miasma.halfRows * t) / t));
   const maxRow = Math.min(rows - 1, Math.floor((tri.aabb.maxY + pad + miasma.halfRows * t) / t));
 
+  let carved = false;
   for (let row = minRow; row <= maxRow; row++) {
     for (let col = minCol; col <= maxCol; col++) {
       // Tile center in world space
@@ -225,10 +226,14 @@ export function carveObstaclesWithDrillTri(miasma, obstacleGrid, tri, dt, pad = 
       // Only clear if the tile center is inside the drill triangle
       if (pointInTriangle(cx, cy, tri.a, tri.b, tri.c)) {
         const idx = row * cols + col;
-        if (grid[idx] === 1) grid[idx] = 0;
+        if (grid[idx] === 1) {
+          grid[idx] = 0;
+          carved = true;
+        }
       }
     }
   }
+  return carved;
 }
 
 // Barycentric point-in-triangle (robust & fast)

@@ -21,10 +21,14 @@ export function initDrill(player, opts = {}) {
   return drill;
 }
 
-export function drawDrill(ctx, drill, mouse, activeWeapon, cx, cy) {
+export function drawDrill(ctx, drill, mouse, activeWeapon, cx, cy, overheated = false) {
   if (!drill || activeWeapon !== "drill") return;
 
   const { length, width, offset, fill, stroke, capFill, capStroke, playerRadius } = drill;
+  const bodyFill = overheated ? "#ff5555" : fill;
+  const bodyStroke = overheated ? "#aa0000" : stroke;
+  const baseFill = overheated ? "#ff7777" : capFill;
+  const baseStroke = overheated ? "#aa2222" : capStroke;
 
   // Aim in SCREEN space
   const ang = Math.atan2(mouse.y - cy, mouse.x - cx);
@@ -55,11 +59,11 @@ export function drawDrill(ctx, drill, mouse, activeWeapon, cx, cy) {
   ctx.closePath();
 
   ctx.globalAlpha = 0.95;
-  ctx.fillStyle = fill;
+  ctx.fillStyle = bodyFill;
   ctx.fill();
 
   ctx.globalAlpha = 1.0;
-  ctx.strokeStyle = stroke;
+  ctx.strokeStyle = bodyStroke;
   ctx.lineWidth = 2;
   ctx.stroke();
 
@@ -67,9 +71,9 @@ export function drawDrill(ctx, drill, mouse, activeWeapon, cx, cy) {
   const capR = width * 0.4; // slightly bigger for chunky look
   ctx.beginPath();
   ctx.arc(baseX, baseY, capR, 0, Math.PI * 2);
-  ctx.fillStyle = capFill;
+  ctx.fillStyle = baseFill;
   ctx.fill();
-  ctx.strokeStyle = capStroke;
+  ctx.strokeStyle = baseStroke;
   ctx.lineWidth = 2;
   ctx.stroke();
 

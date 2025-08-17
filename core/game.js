@@ -13,6 +13,11 @@ const ctx = canvas.getContext("2d", { alpha: false });
 const state = createGameState();
 state.maxScrap = config.game.winScrap;
 state.laserEnergy = state.maxLaserEnergy = config.game.maxLaserEnergy;
+state.drillHeat = 0;
+state.maxDrillHeat = config.drill.maxHeat;
+state.drillOverheated = false;
+state.drillCoolTimer = 0;
+state.drillDidHit = false;
 
 // ---- Resize ----
 function resize() {
@@ -98,6 +103,11 @@ function startGame() {
   state.gameOver = false;
   state.win = false;
   state.damageFlash = 0;
+  state.drillHeat = 0;
+  state.maxDrillHeat = config.drill.maxHeat;
+  state.drillOverheated = false;
+  state.drillCoolTimer = 0;
+  state.drillDidHit = false;
 
   // player / run
   state.health = state.maxHealth;
@@ -134,6 +144,7 @@ devhud.initDevHUD(state);
 // ---- Update ----
 function update(dt) {
   state.time += dt;
+  state.drillDidHit = false;
 
   // movement
   let vx = 0, vy = 0;
@@ -158,9 +169,11 @@ function update(dt) {
 
 
 // --- Drill carving using triangle hitbox ---
-if (state.activeWeapon === "drill" && state.drill) {
+if (state.activeWeapon === "drill" && state.drill && !state.drillOverheated) {
   const tri = drill.getDrillTriangleWorld(state.drill, state.camera, state.mouse);
-  world.carveObstaclesWithDrillTri(state.miasma, state.obstacleGrid, tri, dt, 2); // pad=2 for small buffer
+  if (world.carveObstaclesWithDrillTri(state.miasma, state.obstacleGrid, tri, dt, 2)) {
+    state.drillDidHit = true;
+  }
 }
 
 
@@ -170,8 +183,23 @@ if (state.activeWeapon === "drill" && state.drill) {
   enemies.updateEnemies(state, dt);
   pickups.updatePickups(state.pickups, state.camera, state.player, state, dt);
 
-
-
+  // Drill heat accumulation & cooling
+  if (state.drillDidHit && !state.drillOverheated) {
+    state.drillHeat += config.drill.heatRate * dt;
+    state.drillCoolTimer = 0;
+    if (state.drillHeat >= state.maxDrillHeat) {
+      state.drillHeat = state.maxDrillHeat;
+      state.drillOverheated = true;
+    }
+  } else {
+    state.drillCoolTimer += dt;
+    if (state.drillCoolTimer >= config.drill.coolDelay) {
+      state.drillHeat = Math.max(0, state.drillHeat - config.drill.coolRate * dt);
+    }
+  }
+  if (state.drillOverheated && state.drillHeat <= config.drill.resumeThreshold) {
+    state.drillOverheated = false;
+  }
 
   // Win condition
   if (!state.gameOver && state.scrap >= state.maxScrap) {
@@ -248,7 +276,7 @@ if (state.activeWeapon === "beam") {
   if (state.activeWeapon === "beam") {
     beam.drawBeam(ctx, state.beam, cx, cy);
   } else if (state.activeWeapon === "drill") {
-    drill.drawDrill(ctx, state.drill, state.mouse, state.activeWeapon, cx, cy);
+    drill.drawDrill(ctx, state.drill, state.mouse, state.activeWeapon, cx, cy, state.drillOverheated);
   }
 
 
