@@ -17,8 +17,6 @@
  * @property {number} bufferRows
  * @property {number} offsetX
  * @property {number} offsetY
- * @property {number} accX
- * @property {number} accY
  */
 
 /**
@@ -36,21 +34,6 @@ export function initMiasma(cfg) {
     tiles[i] = Math.random() < cfg.spawnProb ? 1 : 0;
   }
 
-  const m = {
-    tile: cfg.tile,
-    cols,
-    rows,
-    stride: cols,
-    size,
-    tiles,
-    spawnProb: cfg.spawnProb,
-    bufferCols: cfg.bufferCols,
-    bufferRows: cfg.bufferRows,
-    offsetX: 0,
-    offsetY: 0,
-    accX: 0,
-    accY: 0
-  };
 
   // --- force clear a safe zone at center ---
   const safeR = 10; // radius in tiles
@@ -80,8 +63,6 @@ export function initMiasma(cfg) {
     bufferRows: cfg.bufferRows,
     offsetX: 0,
     offsetY: 0,
-    accX: 0,
-    accY: 0,
     dps: 35
   };
 }
@@ -97,14 +78,14 @@ export function initMiasma(cfg) {
 export function updateMiasma(m, wind, dt) {
   // accumulate displacement
   const move = wind.speed * dt;
-  m.accX += Math.cos(wind.direction) * move;
-  m.accY += Math.sin(wind.direction) * move;
+  m.offsetX += Math.cos(wind.direction) * move;
+  m.offsetY += Math.sin(wind.direction) * move;
 
   // shift whole tiles
-  while (m.accX >= m.tile) { shift(m, -1, 0); m.accX -= m.tile; }
-  while (m.accX <= -m.tile) { shift(m, +1, 0); m.accX += m.tile; }
-  while (m.accY >= m.tile) { shift(m, 0, -1); m.accY -= m.tile; }
-  while (m.accY <= -m.tile) { shift(m, 0, +1); m.accY += m.tile; }
+ while (m.offsetX >= m.tile) { shift(m, -1, 0); }
+  while (m.offsetX <= -m.tile) { shift(m, +1, 0); }
+  while (m.offsetY >= m.tile) { shift(m, 0, -1); }
+  while (m.offsetY <= -m.tile) { shift(m, 0, +1); }
 }
 
 /**
@@ -154,6 +135,8 @@ function shift(m, dx, dy) {
       }
     }
   }
+  m.offsetX += dx * m.tile;
+  m.offsetY += dy * m.tile;
 }
 
 /**
@@ -162,19 +145,24 @@ function shift(m, dx, dy) {
 export function drawMiasma(ctx, m, cam, cx, cy, w, h) {
   ctx.fillStyle = "rgba(80,40,120,0.4)";
 
-  // Center the grid at world (0,0) to match worldToIdx
-  const originX = -Math.floor(m.cols / 2) * m.tile;
-  const originY = -Math.floor(m.rows / 2) * m.tile;
+  const t = m.tile;
+  const cxTiles = Math.floor(m.cols / 2);
+  const cyTiles = Math.floor(m.rows / 2);
+
+  // use sub-tile remainder for smooth motion
+  const originX = -cxTiles * t + m.accX;
+  const originY = -cyTiles * t + m.accY;
 
   for (let y = 0; y < m.rows; y++) {
-    const wy = originY + y * m.tile - cam.y + cy;
+     const wy = originY + y * m.tile + m.offsetY - cam.y + cy;
     for (let x = 0; x < m.cols; x++) {
       if (m.tiles[y * m.cols + x] !== 1) continue;
-      const wx = originX + x * m.tile - cam.x + cx;
-      ctx.fillRect(wx, wy, m.tile, m.tile);
+       const wx = originX + x * m.tile + m.offsetX - cam.x + cx;
+      ctx.fillRect(wx, wy, t, t);
     }
   }
 }
+
 
 
 export function worldToIdx(m, wx, wy) {

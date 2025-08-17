@@ -6,7 +6,6 @@
  * @property {number} speed       // tiles/sec
  * @property {"manual"|"auto"} mode
  * @property {number} driftTimer
- * @property {number} nextShiftAt
  * @property {number} targetDir
  * @property {number} targetSpeed
  */
@@ -22,7 +21,6 @@ export function initWind(cfg) {
     speed: cfg.minSpeed,
     mode: "auto",
     driftTimer: 0,
-    nextShiftAt: cfg.bigShiftInterval,
     targetDir: 0,
     targetSpeed: cfg.minSpeed
   };
@@ -39,20 +37,18 @@ export function updateWind(wind, dt, cfg) {
 
   wind.driftTimer += dt;
 
-  // Every bigShiftInterval, pick a new target
-  if (wind.driftTimer >= wind.nextShiftAt) {
+  // Apply small random jitter each frame
+  wind.targetDir += (Math.random() * 2 - 1) * cfg.smallJitter * dt;
+
+ // When timer exceeds interval, add a large shift and randomize speed
+  if (wind.driftTimer >= cfg.bigShiftInterval) {
     wind.driftTimer = 0;
-    wind.nextShiftAt = cfg.bigShiftInterval;
 
-    // Turn by ± bigShiftMagnitude
-    const turn = (Math.random() * 2 - 1) * cfg.bigShiftMagnitude;
-    wind.targetDir = wind.direction + turn;
-
-    // Pick random speed in range
+    wind.targetDir += (Math.random() * 2 - 1) * cfg.bigShiftMagnitude;
     wind.targetSpeed = cfg.minSpeed + Math.random() * (cfg.maxSpeed - cfg.minSpeed);
 
     // Debug log
-    console.log("[wind] new target:", wind.targetDir.toFixed(2), wind.targetSpeed.toFixed(2));
+       console.log("[wind] big shift:", wind.targetDir.toFixed(2), wind.targetSpeed.toFixed(2));
   }
 
   // Smoothly interpolate current toward target
