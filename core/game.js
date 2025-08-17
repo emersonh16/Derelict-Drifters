@@ -48,7 +48,7 @@ canvas.addEventListener("mousemove", (e) => {
 
 canvas.addEventListener("wheel", (e) => {
   if (state.paused || state.gameOver) return;
-  beam.onWheelAdjust(state.beam, e.deltaY);
+  beam.handleEvent(e, state.beam);
   e.preventDefault();
 }, { passive: false });
 
@@ -127,7 +127,7 @@ function startGame() {
   const wInit = world.initWorld(state.miasma, state.player, config.world); // world depends on miasma size
   state.world = wInit.world;
   state.obstacleGrid = wInit.obstacleGrid;
-  state.beam = beam.initBeam(config.beam);
+  state.beam = beam.init(config.beam);
   state.enemies = enemies.initEnemies(state.miasma, config.enemies);
   state.enemyProjectiles.length = 0;
   enemies.spawnInitialEnemies(state, config.enemies.max);
@@ -239,7 +239,7 @@ if (state.activeWeapon === "drill" && state.drill && !state.drillOverheated) {
       state.laserEnergy = 0;
       // auto shut off laser if empty
       beamState.t = beamState.tConeEnd - 0.01; // forces it back to cone mode
-      beam.getBeamGeom(state.beam, state.mouse, canvas.width / 2, canvas.height / 2);
+      beam.update(state.beam, state.mouse, canvas.width / 2, canvas.height / 2);
     }
   } else {
     state.laserEnergy = Math.min(
@@ -261,7 +261,7 @@ function draw() {
   ctx.fillRect(0, 0, w, h);
 
 if (state.activeWeapon === "beam") {
-  beam.getBeamGeom(state.beam, state.mouse, cx, cy);
+  beam.update(state.beam, state.mouse, cx, cy);
   if (!state.paused && !state.gameOver) {
     miasma.clearWithBeam(state.miasma, state.beam, state.camera, state.time, cx, cy);
   }
@@ -274,7 +274,7 @@ if (state.activeWeapon === "beam") {
   miasma.drawMiasma(ctx, state.miasma, state.camera, cx, cy, w, h);
   world.drawWorldBorder(ctx, state.world, state.camera, cx, cy);
   if (state.activeWeapon === "beam") {
-    beam.drawBeam(ctx, state.beam, cx, cy);
+    beam.draw(ctx, state.beam, cx, cy);
   } else if (state.activeWeapon === "drill") {
     drill.drawDrill(ctx, state.drill, state.mouse, state.activeWeapon, cx, cy, state.drillOverheated);
   }

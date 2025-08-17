@@ -1,7 +1,7 @@
 // systems/beam.js — half-size beam with distinct laser core
 /** @typedef {import('../core/state.js').BeamState} BeamState */
 
-export function initBeam(opts = {}) {
+export function init(opts = {}) {
   /** @type {BeamState} */
   const beam = {
     // control
@@ -55,12 +55,13 @@ export function initBeam(opts = {}) {
   return beam;
 }
 
-export function onWheelAdjust(b, deltaY) {
-  const dir = deltaY > 0 ? -1 : 1; // wheel down => laser, wheel up => off
+export function handleEvent(evt, b) {
+  if (evt.type !== 'wheel') return;
+  const dir = evt.deltaY > 0 ? -1 : 1; // wheel down => laser, wheel up => off
   b.t = clamp(b.t + dir * b.step, 0, 1);
 }
 
-export function getBeamGeom(b, mouse, cx, cy) {
+export function update(b, mouse, cx, cy) {
   const t = b.t;
   const ang = Math.atan2(mouse.y - cy, mouse.x - cx);
 
@@ -86,7 +87,7 @@ export function getBeamGeom(b, mouse, cx, cy) {
   return Object.assign(b, { mode: 'laser', range: b.laserRange, halfArc, angle: ang, radius: 0 });
 }
 
-export function drawBeam(ctx, b, cx, cy) {
+export function draw(ctx, b, cx, cy) {
   if (b.mode === 'none') return;
   if (b.mode === 'bubble') return drawCircle(ctx, cx, cy, b.radius, b);
   if (b.mode === 'cone')   return drawCone(ctx, cx, cy, b.halfArc, b.range, b);
