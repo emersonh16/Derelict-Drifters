@@ -73,7 +73,6 @@ console.log("[miasma] debug spawn → fog tiles:", fogCount, "of", tiles.length)
       bufferRows: cfg.bufferRows,
       offsetX: 0,
       offsetY: 0,
-      angle: 0,
     };
 }
 
@@ -97,8 +96,7 @@ export function updateMiasma(m, wind, dt) {
   while (m.offsetY >= m.tile) { shift(m, 0, -1); }
   while (m.offsetY <= -m.tile) { shift(m, 0, +1); }
 
-  // NEW: lock visual rotation to wind
-  m.angle = wind.direction;
+
 }
 
 
@@ -170,15 +168,10 @@ export function drawMiasma(ctx, m, cam, cx, cy, w, h) {
   const ox = Math.round(subX);
   const oy = Math.round(subY);
 
-  // World origin of grid BEFORE rotation
+   // World origin of grid
   const originX = -cxTiles * t + ox;
   const originY = -cyTiles * t + oy;
 
-  // Rotate around player (screen center)
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate(m.angle);
-  ctx.translate(-cx, -cy);
 
   for (let y = 0; y < m.rows; y++) {
     const wy = ((originY + y * t - cam.y + cy) | 0);  // integer pixel
@@ -189,7 +182,7 @@ export function drawMiasma(ctx, m, cam, cx, cy, w, h) {
     }
   }
 
-  ctx.restore();
+
 }
 
 
@@ -210,17 +203,9 @@ export function worldToIdx(m, wx, wy, camera) {
   const originX = -cxTiles * t + ox;
   const originY = -cyTiles * t + oy;
 
-  // Inverse-rotate the world point around the player to grid space
-  const a = -m.angle;
-  const ca = Math.cos(a), sa = Math.sin(a);
-  const px = camera.x, py = camera.y;       // rotate around player (camera center)
-  const dx = wx - px, dy = wy - py;
-  const gx = px + (dx * ca - dy * sa);
-  const gy = py + (dx * sa + dy * ca);
-
-  // Convert to tile coords
-  const x = Math.floor((gx - originX) / t);
-  const y = Math.floor((gy - originY) / t);
+  // Convert world position to tile coords
+  const x = Math.floor((wx - originX) / t);
+  const y = Math.floor((wy - originY) / t);
 
   if (x < 0 || x >= cols || y < 0 || y >= rows) return -1;
   return y * cols + x;
@@ -255,11 +240,6 @@ export function clearWithBeam(m, beamState, camera, time, cx, cy) {
   // Player in world
   const px = camera.x, py = camera.y;
 
-  // Work in grid space: inverse-rotate the beam and vectors
-  const aInv = -m.angle;
-  const ca = Math.cos(aInv), sa = Math.sin(aInv);
-  const angleGrid = angleW + aInv; // rotate beam angle into grid space
-
   // Player tile
   const ix0 = Math.floor((px - originX) / t);
   const iy0 = Math.floor((py - originY) / t);
@@ -285,13 +265,11 @@ export function clearWithBeam(m, beamState, camera, time, cx, cy) {
 
       const wx = originX + ix * t + t * 0.5;
 
-      // Vector from player to tile center in WORLD...
+     // Vector from player to tile center in world space
       const dxW = wx - px, dyW = wy - py;
-      // ...then inverse-rotate into GRID space
-      const gx = dxW * ca - dyW * sa;
-      const gy = dxW * sa + dyW * ca;
+ 
 
-      const dist = Math.hypot(gx, gy);
+        const dist = Math.hypot(dxW, dyW);
       if (dist > maxRange) continue;
 
       if (mode === "bubble") {
@@ -299,8 +277,8 @@ export function clearWithBeam(m, beamState, camera, time, cx, cy) {
         continue;
       }
 
-      const aTile = Math.atan2(gy, gx);
-      if (angDiff(aTile, angleGrid) <= halfArc) {
+         const aTile = Math.atan2(dyW, dxW);
+      if (angDiff(aTile, angleW) <= halfArc) {
         m.tiles[idx] = 0;
       }
     }
