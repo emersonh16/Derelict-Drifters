@@ -210,9 +210,7 @@ if (state.activeWeapon === "drill" && state.drill && !state.drillOverheated) {
 
 
 
-  if (state.miasmaEnabled) {
-    miasma.updateMiasma(state.miasma, state.wind, dt);
-  }
+
   enemies.updateEnemies(state, dt);
   pickups.updatePickups(state.pickups, state.camera, state.player, state, dt);
 

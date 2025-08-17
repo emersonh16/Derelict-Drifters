@@ -150,14 +150,14 @@ export function drawMiasma(ctx, m, cam, cx, cy, w, h) {
   const cyTiles = Math.floor(m.rows / 2);
 
   // use sub-tile remainder for smooth motion
-  const originX = -cxTiles * t + m.accX;
-  const originY = -cyTiles * t + m.accY;
+   const originX = -cxTiles * t + m.offsetX;
+  const originY = -cyTiles * t + m.offsetY;
 
   for (let y = 0; y < m.rows; y++) {
-     const wy = originY + y * m.tile + m.offsetY - cam.y + cy;
+      const wy = originY + y * m.tile - cam.y + cy;
     for (let x = 0; x < m.cols; x++) {
       if (m.tiles[y * m.cols + x] !== 1) continue;
-       const wx = originX + x * m.tile + m.offsetX - cam.x + cx;
+       const wx = originX + x * m.tile - cam.x + cx;
       ctx.fillRect(wx, wy, t, t);
     }
   }
