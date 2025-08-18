@@ -15,16 +15,21 @@
  * @param {import("../core/config.js").config["wind"]} cfg
  * @returns {WindState}
  */
+// systems/wind.js
 export function initWind(cfg) {
+  // Seed immediate motion so wind is alive from frame 1.
+  const dir = Math.random() * Math.PI * 2;
+  const spd = cfg.minSpeed + Math.random() * Math.max(0, cfg.maxSpeed - cfg.minSpeed);
   return {
-    direction: 0,
-    speed: cfg.minSpeed,
+    direction: dir,
+    speed: spd,
     mode: "auto",
     driftTimer: 0,
-    targetDir: 0,
-    targetSpeed: cfg.minSpeed
+    targetDir: dir,
+    targetSpeed: spd,
   };
 }
+
 
 /**
  * Update the wind state.
