@@ -85,6 +85,10 @@ export function toggleDevHUD(state) {
   }
 }
 
+export function isVisible() {
+  return root && root.style.display !== "none";
+}
+
 /** One-time sync from state → inputs */
 function primeFromState(state) {
   if (!els || !state.wind || !state.miasma) return;

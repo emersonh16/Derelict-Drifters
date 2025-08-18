@@ -419,8 +419,10 @@ function loop(now) {
 
   draw();
 
-  devhud.updateDevHUD(state, state.dt);
-  devhud.drawDevHUD(ctx, state);
+  if (devhud.isVisible()) {
+    devhud.updateDevHUD(state, state.dt);
+    devhud.drawDevHUD(ctx, state);
+  }
 
   requestAnimationFrame(loop);
 }
