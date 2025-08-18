@@ -94,22 +94,27 @@ export const config = {
 
   wind: {
     minSpeed: 0,             // was 0.5
-    maxSpeed: 80,            // was 3
+    maxSpeed: 100,            // was 3
     smoothTime: 0.9,         // was 5 (snappier response to targets)
-    smallJitter: 0.05,     // rad/s of small random drift
     bigShiftInterval: 10,  // sec between major shifts
     bigShiftMagnitude: Math.PI // up to 180° turn
   },
 
 dynamicMiasma: {
-  cols: 200,
-  rows: 200,
-  tile: 14,
+  cols: 400,
+  rows: 400,
+  tile: 4,
   bufferCols: 4,
   bufferRows: 4,
-  spawnProb: 0.3,
+  spawnProb: 1,
   dps: 5,
-  debugSpawn: false,   // << toggle this if you want the 70% test mode
+  debugSpawn: false,
+
+  // NEW regrow settings
+  regrowEnabled: true,    // master toggle
+  regrowDelay: 1.0,       // seconds after clear before eligible
+  baseChance: 0.20,       // probability per tick for a cleared tile to regrow
+  tickHz: 8               // how many regrow checks per second
 },
 
 };

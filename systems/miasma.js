@@ -1,7 +1,19 @@
 // systems/miasma.js
 /**
- * Conveyor-belt style miasma grid.
- * Tiles drift with wind; cleared tiles remain cleared.
+ * Conveyor-belt style miasma grid + OLD-STYLE REGROWTH.
+ * - Grid drifts in whole tiles based on wind.
+ * - Clearing records timestamps.
+ * - Regrowth happens in ticks, using a double buffer and
+ *   adjacency-biased probability like your old implementation.
+ *
+ * Exports:
+ *  - initMiasma(cfg)
+ *  - updateMiasma(m, wind, dt)
+ *  - regrowMiasma(m, cfg, time, dt)
+ *  - drawMiasma(ctx, m, cam, cx, cy, w, h)
+ *  - worldToIdx(m, wx, wy)
+ *  - isFog(m, idx)
+ *  - clearWithBeam(m, beamState, camera, time, cx, cy)
  */
 
 /**
@@ -9,14 +21,19 @@
  * @property {number} tile
  * @property {number} cols
  * @property {number} rows
+ * @property {number} halfCols
+ * @property {number} halfRows
  * @property {number} stride
  * @property {number} size
- * @property {Uint8Array} tiles
+ * @property {Uint8Array} strength       // 1 = fog, 0 = clear
+ * @property {Uint8Array} strengthNext   // double buffer
+ * @property {Float32Array} lastClear    // game-time when tile was cleared
  * @property {number} spawnProb
  * @property {number} bufferCols
  * @property {number} bufferRows
  * @property {number} offsetX
  * @property {number} offsetY
+ * @property {number} regrowTimer        // tick accumulator
  */
 
 export function initMiasma(cfg) {
@@ -24,12 +41,12 @@ export function initMiasma(cfg) {
   const rows = cfg.rows + cfg.bufferRows * 2;
   const size = cols * rows;
 
-  const tiles = new Uint8Array(size);
+  const strength = new Uint8Array(size);
   for (let i = 0; i < size; i++) {
-    tiles[i] = Math.random() < cfg.spawnProb ? 1 : 0;
+    strength[i] = Math.random() < cfg.spawnProb ? 1 : 0;
   }
 
-  // clear safe zone in center
+  // Optional "safe" patch in center so the player isn't insta-damaged at t0.
   const safeR = 10;
   const cx = Math.floor(cols / 2);
   const cy = Math.floor(rows / 2);
@@ -37,38 +54,44 @@ export function initMiasma(cfg) {
     for (let dx = -safeR; dx <= safeR; dx++) {
       const x = cx + dx, y = cy + dy;
       if (x < 0 || x >= cols || y < 0 || y >= rows) continue;
-      tiles[y * cols + x] = 0;
+      strength[y * cols + x] = 0;
     }
   }
 
   if (cfg.debugSpawn) {
     let fogCount = 0;
-    for (let i = 0; i < tiles.length; i++) {
-      tiles[i] = Math.random() < 0.7 ? 1 : 0;
-      if (tiles[i] === 1) fogCount++;
+    for (let i = 0; i < size; i++) {
+      strength[i] = Math.random() < 0.7 ? 1 : 0;
+      if (strength[i] === 1) fogCount++;
     }
-    console.log("[miasma] debug spawn → fog tiles:", fogCount, "of", tiles.length);
+    console.log("[miasma] debug spawn → fog tiles:", fogCount, "of", size);
   }
 
   return {
     tile: cfg.tile,
-    cols,
-    rows,
+    cols, rows,
     halfCols: Math.floor(cols / 2),
     halfRows: Math.floor(rows / 2),
     stride: cols,
     size,
-    tiles,
+
+    strength,
+    strengthNext: new Uint8Array(size).fill(1),
+    lastClear: new Float32Array(size).fill(-1e9),
+
     spawnProb: cfg.spawnProb,
     bufferCols: cfg.bufferCols,
     bufferRows: cfg.bufferRows,
+
     offsetX: 0,
     offsetY: 0,
+
+    regrowTimer: 0
   };
 }
 
 /**
- * Update conveyor drift (whole tiles only; no sub-tile drift).
+ * Drift the grid (whole tiles) according to wind.
  */
 export function updateMiasma(m, wind, dt) {
   const move = wind.speed * dt;
@@ -81,44 +104,30 @@ export function updateMiasma(m, wind, dt) {
   while (m.offsetY <= -m.tile) { shift(m, 0, -1); m.offsetY += m.tile; }
 }
 
-function shift(m, dx, dy) {
-  const { cols, rows, tiles, spawnProb } = m;
-  if (dx) {
-    for (let y = 0; y < rows; y++) {
-      if (dx > 0) {
-        for (let x = cols - 1; x > 0; x--) {
-          tiles[y * cols + x] = tiles[y * cols + x - 1];
-        }
-        tiles[y * cols] = Math.random() < spawnProb ? 1 : 0;
-      } else {
-        for (let x = 0; x < cols - 1; x++) {
-          tiles[y * cols + x] = tiles[y * cols + x + 1];
-        }
-        tiles[y * cols + (cols - 1)] = Math.random() < spawnProb ? 1 : 0;
-      }
-    }
-  }
-  if (dy) {
-    if (dy > 0) {
-      for (let y = rows - 1; y > 0; y--) {
-        for (let x = 0; x < cols; x++) {
-          tiles[y * cols + x] = tiles[(y - 1) * cols + x];
-        }
-      }
-      for (let x = 0; x < cols; x++) tiles[x] = Math.random() < spawnProb ? 1 : 0;
-    } else {
-      for (let y = 0; y < rows - 1; y++) {
-        for (let x = 0; x < cols; x++) {
-          tiles[y * cols + x] = tiles[(y + 1) * cols + x];
-        }
-      }
-      for (let x = 0; x < cols; x++) tiles[(rows - 1) * cols + x] = Math.random() < spawnProb ? 1 : 0;
-    }
+/**
+ * OLD-STYLE regrowth tick (adjacency biased, double buffer).
+ * Call this after updateMiasma in the main loop.
+ *
+ * cfg fields (from config.dynamicMiasma):
+ *  - regrowEnabled: boolean
+ *  - regrowDelay:   seconds
+ *  - baseChance:    probability per tick for each adjacent fog (combined as 1-(1-p)^adj)
+ *  - tickHz:        ticks per second
+ */
+export function regrowMiasma(m, cfg, time, dt) {
+  if (!cfg || !cfg.regrowEnabled) return;
+
+  const tickHz = cfg.tickHz || 8;
+  const step = 1 / tickHz;
+  m.regrowTimer += dt;
+  while (m.regrowTimer >= step) {
+    m.regrowTimer -= step;
+    regrowStep(m, time, cfg.regrowDelay ?? 1.0, cfg.baseChance ?? 0.20);
   }
 }
 
 /**
- * Draw miasma aligned to world pixel grid.
+ * Draw fog tiles aligned to world pixel grid (centered grid).
  */
 export function drawMiasma(ctx, m, cam, cx, cy, w, h) {
   ctx.fillStyle = "rgba(180,120,255,1.0)";
@@ -132,7 +141,7 @@ export function drawMiasma(ctx, m, cam, cx, cy, w, h) {
   for (let y = 0; y < m.rows; y++) {
     const wy = ((originY + y * t - cam.y + cy) | 0);
     for (let x = 0; x < m.cols; x++) {
-      if (m.tiles[y * m.cols + x] !== 1) continue;
+      if (m.strength[y * m.cols + x] !== 1) continue;
       const wx = ((originX + x * t - cam.x + cx) | 0);
       ctx.fillRect(wx, wy, t, t);
     }
@@ -140,16 +149,14 @@ export function drawMiasma(ctx, m, cam, cx, cy, w, h) {
 }
 
 /**
- * Convert a world position to a miasma tile index.
- * Note: camera is unused (kept for API compatibility).
+ * Convert a world position to a grid index.
  */
-export function worldToIdx(m, wx, wy, /* camera */) {
+export function worldToIdx(m, wx, wy /*, camera */) {
   const t = m.tile;
   const cols = m.cols, rows = m.rows;
   const cxTiles = Math.floor(cols / 2);
   const cyTiles = Math.floor(rows / 2);
 
-  // Same locked origin as drawMiasma
   const originX = -cxTiles * t;
   const originY = -cyTiles * t;
 
@@ -161,16 +168,16 @@ export function worldToIdx(m, wx, wy, /* camera */) {
 }
 
 /**
- * Return true iff the index is in-bounds and fogged.
+ * True iff the index is in-bounds and fogged.
  */
 export function isFog(m, idx) {
   if (idx < 0 || idx >= m.size) return false;
-  return m.tiles[idx] === 1;
+  return m.strength[idx] === 1;
 }
 
 /**
  * Clear tiles intersecting the beam shape in world space.
- * Signature kept identical to existing calls in game.js.
+ * Records lastClear for regrowDelay.
  */
 export function clearWithBeam(m, beamState, camera, time, cx, cy) {
   const mode     = beamState.mode;     // "bubble" | "cone" | "laser"
@@ -182,11 +189,10 @@ export function clearWithBeam(m, beamState, camera, time, cx, cy) {
   const t = m.tile, cols = m.cols, rows = m.rows;
   const cxTiles = Math.floor(cols / 2), cyTiles = Math.floor(rows / 2);
 
-  // Same locked origin as drawMiasma
   const originX = -cxTiles * t;
   const originY = -cyTiles * t;
 
-  // Player's world position
+  // Player world position
   const px = camera.x, py = camera.y;
 
   // Center tile around player and clamp a search window
@@ -210,7 +216,7 @@ export function clearWithBeam(m, beamState, camera, time, cx, cy) {
     const wy = originY + iy * t + t * 0.5;
     for (let ix = minX; ix <= maxX; ix++) {
       const idx = iy * cols + ix;
-      if (m.tiles[idx] === 0) continue;
+      if (m.strength[idx] === 0) continue;
 
       const wx = originX + ix * t + t * 0.5;
 
@@ -220,15 +226,129 @@ export function clearWithBeam(m, beamState, camera, time, cx, cy) {
       if (dist > maxRange) continue;
 
       if (mode === "bubble") {
-        m.tiles[idx] = 0;
+        m.strength[idx] = 0;
+        m.lastClear[idx] = time;
         continue;
       }
 
       const aTile = Math.atan2(dyW, dxW);
       if (angDiffAbs(aTile, angleW) <= halfArc) {
-        m.tiles[idx] = 0;
+        m.strength[idx] = 0;
+        m.lastClear[idx] = time;
       }
     }
   }
 }
 
+/* ---------------- Internals ---------------- */
+
+function regrowStep(s, now, regrowDelay, baseChance) {
+  const prev = s.strength;
+  const next = s.strengthNext;
+
+  // copy current → next (no allocation)
+  next.set(prev);
+
+  const cols = s.cols, rows = s.rows;
+
+  for (let y = 0; y < rows; y++) {
+    const yUpOK = (y - 1) >= 0;
+    const yDnOK = (y + 1) < rows;
+    for (let x = 0; x < cols; x++) {
+      const i = y * cols + x;
+      if (prev[i] === 1) continue;                        // already fog
+      if ((now - s.lastClear[i]) < regrowDelay) continue; // not yet eligible
+
+      let adj = 0;
+      if (x - 1 >= 0     && prev[i - 1]         === 1) adj++;
+      if (x + 1 < cols   && prev[i + 1]         === 1) adj++;
+      if (yUpOK          && prev[i - cols]      === 1) adj++;
+      if (yDnOK          && prev[i + cols]      === 1) adj++;
+
+      if (adj > 0) {
+        // Combine chance from neighbors: p = 1 - (1 - base)^adj
+        const p = 1 - Math.pow(1 - baseChance, adj);
+        if (Math.random() < p) next[i] = 1;
+      }
+    }
+  }
+
+  // swap buffers
+  s.strength = next;
+  s.strengthNext = prev;
+}
+
+function shift(m, dx, dy) {
+  const { cols, rows, strength, strengthNext, lastClear, spawnProb } = m;
+
+  // When shifting, we must move both strength and lastClear.
+  // We don't need strengthNext during shifting, but keep it in sync by ignoring it here;
+  // it will be overwritten on the next regrow step (next.set(prev)).
+
+  if (dx) {
+    for (let y = 0; y < rows; y++) {
+      if (dx > 0) {
+        // shift right: copy from left neighbor
+        for (let x = cols - 1; x > 0; x--) {
+          const to = y * cols + x;
+          const from = y * cols + (x - 1);
+          strength[to]   = strength[from];
+          lastClear[to]  = lastClear[from];
+        }
+        // new leftmost column
+        const idx = y * cols;
+        strength[idx]  = Math.random() < spawnProb ? 1 : 0;
+        lastClear[idx] = 0;
+      } else {
+        // shift left: copy from right neighbor
+        for (let x = 0; x < cols - 1; x++) {
+          const to = y * cols + x;
+          const from = y * cols + (x + 1);
+          strength[to]   = strength[from];
+          lastClear[to]  = lastClear[from];
+        }
+        // new rightmost column
+        const idx = y * cols + (cols - 1);
+        strength[idx]  = Math.random() < spawnProb ? 1 : 0;
+        lastClear[idx] = 0;
+      }
+    }
+  }
+
+  if (dy) {
+    if (dy > 0) {
+      // shift down: copy from row above
+      for (let y = rows - 1; y > 0; y--) {
+        for (let x = 0; x < cols; x++) {
+          const to = y * cols + x;
+          const from = (y - 1) * cols + x;
+          strength[to]   = strength[from];
+          lastClear[to]  = lastClear[from];
+        }
+      }
+      // new top row
+      for (let x = 0; x < cols; x++) {
+        const idx = x;
+        strength[idx]  = Math.random() < spawnProb ? 1 : 0;
+        lastClear[idx] = 0;
+      }
+    } else {
+      // shift up: copy from row below
+      for (let y = 0; y < rows - 1; y++) {
+        for (let x = 0; x < cols; x++) {
+          const to = y * cols + x;
+          const from = (y + 1) * cols + x;
+          strength[to]   = strength[from];
+          lastClear[to]  = lastClear[from];
+        }
+      }
+      // new bottom row
+      const base = (rows - 1) * cols;
+      for (let x = 0; x < cols; x++) {
+        const idx = base + x;
+        strength[idx]  = Math.random() < spawnProb ? 1 : 0;
+        lastClear[idx] = 0;
+      }
+    }
+  }
+}
