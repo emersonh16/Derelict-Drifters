@@ -92,10 +92,10 @@ export function updateMiasma(m, wind, dt) {
   m.offsetY += Math.sin(wind.direction) * move;
 
   // shift whole tiles
-  while (m.offsetX >= m.tile) { shift(m, -1, 0); }
-  while (m.offsetX <= -m.tile) { shift(m, +1, 0); }
-  while (m.offsetY >= m.tile) { shift(m, 0, -1); }
-  while (m.offsetY <= -m.tile) { shift(m, 0, +1); }
+   while (m.offsetX >= m.tile) { shift(m, +1, 0); }
+  while (m.offsetX <= -m.tile) { shift(m, -1, 0); }
+  while (m.offsetY >= m.tile) { shift(m, 0, +1); }
+  while (m.offsetY <= -m.tile) { shift(m, 0, -1); }
 
   // keep offsets wrapped within [0, tile) to avoid jitter
   m.offsetX = ((m.offsetX % m.tile) + m.tile) % m.tile;
