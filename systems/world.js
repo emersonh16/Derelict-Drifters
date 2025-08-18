@@ -3,7 +3,7 @@
 /** @typedef {import('../core/state.js').WorldState} WorldState */
 import { isoProject, isoProjectTile } from "../core/iso.js";
 
-export function initWorld(miasma, player, opts = {}) {
+export function initWorld(miasma, player, opts = {}, rng) {
   const t = miasma.tile;
 
   /** @type {WorldState} */
@@ -19,7 +19,7 @@ export function initWorld(miasma, player, opts = {}) {
   const obstacleGrid = new Uint8Array(miasma.size).fill(0);
 
   // Generate irregular rock formations
-  generateObstacles(miasma, obstacleGrid, opts.seedCount ?? 30, opts.growthSteps ?? 700, opts.spawnSafeTiles);
+  generateObstacles(miasma, obstacleGrid, opts.seedCount ?? 30, opts.growthSteps ?? 700, opts.spawnSafeTiles, rng);
 
   // Ensure the spawn area is absolutely clear (in tiles)
   const playerR = player?.r ?? 18;
@@ -30,7 +30,7 @@ export function initWorld(miasma, player, opts = {}) {
 }
 
 // Random-walk growth algorithm for wonky rock shapes
-function generateObstacles(miasma, grid, seedCount = 20, growthSteps = 150, spawnSafeOverride) {
+function generateObstacles(miasma, grid, seedCount = 20, growthSteps = 150, spawnSafeOverride, rng) {
   const cols = miasma.cols;
   const rows = miasma.rows;
 
@@ -42,8 +42,8 @@ function generateObstacles(miasma, grid, seedCount = 20, growthSteps = 150, spaw
     typeof spawnSafeOverride === 'number' ? spawnSafeOverride : 8;
 
   for (let i = 0; i < seedCount; i++) {
-    let col = Math.floor(Math.random() * cols);
-    let row = Math.floor(Math.random() * rows);
+    let col = Math.floor(rng.next() * cols);
+    let row = Math.floor(rng.next() * rows);
 
     // Skip if starting inside spawn-safe zone
     if (Math.hypot(col - centerCol, row - centerRow) <= spawnSafeRadius) continue;
@@ -57,7 +57,7 @@ function generateObstacles(miasma, grid, seedCount = 20, growthSteps = 150, spaw
       }
 
       // Move in a random cardinal direction
-      const dir = Math.floor(Math.random() * 4);
+      const dir = Math.floor(rng.next() * 4);
       if (dir === 0) col++;
       if (dir === 1) col--;
       if (dir === 2) row++;
@@ -70,15 +70,15 @@ function generateObstacles(miasma, grid, seedCount = 20, growthSteps = 150, spaw
       if (row >= rows) row = rows - 1;
 
       // Occasionally branch off into a smaller growth
-      if (Math.random() < 0.05) {
-        generateBranch(grid, col, row, cols, rows, Math.floor(growthSteps / 2), centerCol, centerRow, spawnSafeRadius);
+      if (rng.next() < 0.05) {
+        generateBranch(grid, col, row, cols, rows, Math.floor(growthSteps / 2), centerCol, centerRow, spawnSafeRadius, rng);
       }
     }
   }
 }
 
 // Helper for branching rock growth (also respects spawn-safe zone)
-function generateBranch(grid, col, row, cols, rows, steps, centerCol, centerRow, spawnSafeRadius) {
+function generateBranch(grid, col, row, cols, rows, steps, centerCol, centerRow, spawnSafeRadius, rng) {
   const safeR2 = spawnSafeRadius * spawnSafeRadius;
 
   for (let step = 0; step < steps; step++) {
@@ -88,7 +88,7 @@ function generateBranch(grid, col, row, cols, rows, steps, centerCol, centerRow,
       grid[idx] = 1;
     }
 
-    const dir = Math.floor(Math.random() * 4);
+    const dir = Math.floor(rng.next() * 4);
     if (dir === 0) col++;
     if (dir === 1) col--;
     if (dir === 2) row++;

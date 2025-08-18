@@ -1,5 +1,6 @@
 // core/config.js
 export const config = {
+  seed: 12345,
    game: {
     winScrap: 20,      // scrap required to win
 

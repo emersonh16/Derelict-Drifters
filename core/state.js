@@ -1,5 +1,6 @@
 // core/state.js
 // Global game state definitions and factory.
+import { createRNG } from "../engine/rng.js";
 
 /**
  * @typedef {{x: number, y: number}} Vec2
@@ -32,6 +33,10 @@
  */
 
 /**
+ * @typedef {{ next: () => number }} RNG
+ */
+
+/**
  * @typedef {Object} MiasmaState
  * @property {number} tile
  * @property {number} cols
@@ -54,6 +59,7 @@
  * @property {number} densityT
  * @property {number} densitySeed
  * @property {{minX:number,maxX:number,minY:number,maxY:number}} bubble
+ * @property {RNG} rng
  */
 
 /**
@@ -133,6 +139,7 @@
  * @property {number} t
  * @property {number} dirSeed
  * @property {number} spdSeed
+ * @property {RNG} rng
  */
 
 
@@ -140,6 +147,7 @@
  * @typedef {Object} GameState
  * @property {number} time
  * @property {number} dt
+ * @property {RNG} rng
  * @property {Vec2} mouse
  * @property {Vec2} pendingMouse
  * @property {{x:number,y:number,cx:number,cy:number,isoX:number,isoY:number}} camera
@@ -183,6 +191,7 @@
 export function createGameState() {
   return {
     time: 0, dt: 0,
+    rng: createRNG(0),
     mouse: { x: 0, y: 0 },
     pendingMouse: { x: 0, y: 0 },
     camera: { x: 0, y: 0, cx: 0, cy: 0, isoX: 0, isoY: 0 },

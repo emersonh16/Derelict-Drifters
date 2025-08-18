@@ -52,8 +52,8 @@ function spawnEnemies(state, count = 1, minDistFromPlayer = 150) {
   for (let i = 0; i < count && out.length < cfg.max; i++) {
     let placed = false;
     for (let tries = 0; tries < 60 && !placed; tries++) {
-      const gx = randInt(minGX, maxGX);
-      const gy = randInt(minGY, maxGY);
+      const gx = randInt(minGX, maxGX, state.rng);
+      const gy = randInt(minGY, maxGY, state.rng);
 
       const x = gx * t + t * 0.5;
       const y = gy * t + t * 0.5;
@@ -71,7 +71,7 @@ function spawnEnemies(state, count = 1, minDistFromPlayer = 150) {
       if (state.obstacleGrid && state.obstacleGrid[idx] === 1) continue;
 
       // Type & stats
-      let roll = Math.random();
+      let roll = state.rng.next();
       let type = "normal";
       if (roll < 0.2) type = "fast";
       else if (roll < 0.4) type = "tank";
@@ -187,14 +187,14 @@ export function updateEnemies(state, dt) {
     if (m.hp <= 0) {
       if (m.type === "fast") {
         for (let k = 0; k < 5; k++) {
-          spawnPickup(state.pickups, m.x + Math.random() * 10 - 5, m.y + Math.random() * 10 - 5, "scrap");
+          spawnPickup(state.pickups, m.x + state.rng.next() * 10 - 5, m.y + state.rng.next() * 10 - 5, "scrap");
         }
       } else if (m.type === "tank") {
         for (let k = 0; k < 5; k++) {
-          spawnPickup(state.pickups, m.x + Math.random() * 10 - 5, m.y + Math.random() * 10 - 5, "scrap");
+          spawnPickup(state.pickups, m.x + state.rng.next() * 10 - 5, m.y + state.rng.next() * 10 - 5, "scrap");
         }
       } else {
-        if (Math.random() < 0.1) {
+        if (state.rng.next() < 0.1) {
           spawnPickup(state.pickups, m.x, m.y, "health");
         } else {
           spawnPickup(state.pickups, m.x, m.y, "scrap");
@@ -332,8 +332,8 @@ function distPointToSegmentSq(px, py, x1, y1, x2, y2) {
   return dx * dx + dy * dy;
 }
 
-function randInt(min, max) {
-  return (min + Math.floor(Math.random() * (max - min + 1)));
+function randInt(min, max, rng) {
+  return min + Math.floor(rng.next() * (max - min + 1));
 }
 
 // Used by drill damage AABB pass
