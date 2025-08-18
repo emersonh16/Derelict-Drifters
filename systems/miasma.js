@@ -79,10 +79,6 @@ export function updateMiasma(m, wind, dt) {
   while (m.offsetX <= -m.tile) { shift(m, -1, 0); m.offsetX += m.tile; }
   while (m.offsetY >= m.tile) { shift(m, 0, +1); m.offsetY -= m.tile; }
   while (m.offsetY <= -m.tile) { shift(m, 0, -1); m.offsetY += m.tile; }
-
-  // lock to world grid — no subpixel offsets
-  m.offsetX = 0;
-  m.offsetY = 0;
 }
 
 function shift(m, dx, dy) {

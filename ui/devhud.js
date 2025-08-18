@@ -52,36 +52,75 @@ export function initDevHUD(state) {
     spawnVal: root.querySelector("#dev-fog-spawn-val"),
   };
 
+  // Live label updates while dragging
+  els.dir.addEventListener("input", () => {
+    els.dirVal.textContent = `${els.dir.value}°`;
+  });
+  els.speed.addEventListener("input", () => {
+    els.speedVal.textContent = `${els.speed.value}`;
+  });
+  els.spawn.addEventListener("input", () => {
+    els.spawnVal.textContent = Number(els.spawn.value).toFixed(2);
+  });
+
+  // Initial sync from state → inputs (once)
+  primeFromState(state);
   updateDevHUD(state, 0);
 }
 
 /** Toggle visibility */
 export function toggleDevHUD(state) {
   if (!root) return;
-  root.style.display = (root.style.display === "none") ? "block" : "none";
+  const show = root.style.display === "none";
+  root.style.display = show ? "block" : "none";
+  if (show) {
+    // when opening, refresh inputs from current state once
+    primeFromState(state);
+  }
+}
+
+/** One-time sync from state → inputs */
+function primeFromState(state) {
+  if (!els || !state.wind || !state.miasma) return;
+
+  els.mode.value = state.wind.mode;
+
+  const deg = ((state.wind.direction * 180 / Math.PI) % 360 + 360) % 360;
+  els.dir.value = Math.round(deg);
+  els.dirVal.textContent = `${els.dir.value}°`;
+
+  els.speed.value = state.wind.speed.toFixed(1);
+  els.speedVal.textContent = `${els.speed.value}`;
+
+  els.spawn.value = state.miasma.spawnProb.toFixed(2);
+  els.spawnVal.textContent = Number(els.spawn.value).toFixed(2);
 }
 
 /** @param {GameState} state */
 export function updateDevHUD(state, dt = 0) {
   if (!els || !state.wind || !state.miasma) return;
 
-  // only live-update when paused
+  // We still only show HUD while paused, but don't clobber user edits.
   if (!state.paused) return;
 
-  els.mode.value = state.wind.mode;
+  // If the user is currently editing a control, do NOT overwrite its value.
+  const a = document.activeElement;
+  const editing = a === els.dir || a === els.speed || a === els.spawn || a === els.mode;
 
-  // direction degrees
-  const deg = (state.wind.direction * 180 / Math.PI) % 360;
-  els.dir.value = Math.round(deg);
-  els.dirVal.textContent = els.dir.value + "°";
+  if (!editing) {
+    els.mode.value = state.wind.mode;
 
-  // speed
-  els.speed.value = state.wind.speed.toFixed(1);
-  els.speedVal.textContent = els.speed.value;
+    const deg = ((state.wind.direction * 180 / Math.PI) % 360 + 360) % 360;
+    els.dir.value = Math.round(deg);
 
-  // fog
-  els.spawn.value = state.miasma.spawnProb.toFixed(2);
-  els.spawnVal.textContent = els.spawn.value;
+    els.speed.value = state.wind.speed.toFixed(1);
+    els.spawn.value = state.miasma.spawnProb.toFixed(2);
+  }
+
+  // Always keep labels in sync with current input values
+  els.dirVal.textContent = `${els.dir.value}°`;
+  els.speedVal.textContent = `${els.speed.value}`;
+  els.spawnVal.textContent = Number(els.spawn.value).toFixed(2);
 }
 
 /** Commit values back when unpausing */
@@ -89,7 +128,8 @@ export function applyDevHUD(state) {
   if (!els || !state.wind || !state.miasma) return;
 
   state.wind.mode = els.mode.value;
-  const dirRad = (parseFloat(els.dir.value) || 0) * Math.PI / 180;
+
+  const dirRad = ((parseFloat(els.dir.value) || 0) * Math.PI) / 180;
   state.wind.direction = dirRad;
   state.wind.targetDir = dirRad;
 
@@ -103,5 +143,5 @@ export function applyDevHUD(state) {
 
 /** @param {CanvasRenderingContext2D} ctx @param {GameState} state */
 export function drawDevHUD(ctx, state) {
-  // nothing fancy; DOM already handles it
+  // DOM-based HUD; nothing to draw in canvas
 }
