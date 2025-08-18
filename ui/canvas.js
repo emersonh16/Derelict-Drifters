@@ -6,14 +6,20 @@ ctx.imageSmoothingEnabled = false;
 
 function initCanvas(state, { onWheel, onTogglePause, onRestart, onToggleDevHUD }) {
   function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    state.mouse.x = canvas.width / 2;
-    state.mouse.y = canvas.height / 2;
+    const dpr = window.devicePixelRatio || 1;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
+    ctx.scale(dpr, dpr);
+    state.mouse.x = w / 2;
+    state.mouse.y = h / 2;
     state.pendingMouse.x = state.mouse.x;
     state.pendingMouse.y = state.mouse.y;
-    state.camera.cx = canvas.width / 2;
-    state.camera.cy = canvas.height / 2;
+    state.camera.cx = w / 2;
+    state.camera.cy = h / 2;
   }
   window.addEventListener("resize", resize);
   resize();

@@ -31,6 +31,8 @@ import { isoProjectTile } from "../core/iso.js";
  * @property {Uint8Array} strength       // 1 = fog, 0 = clear
  * @property {Uint8Array} strengthNext   // double buffer
  * @property {Float32Array} lastClear    // game-time when tile was cleared
+ * @property {Uint8Array} tmpStrength    // temp buffer reused during shifts
+ * @property {Float32Array} tmpLastClear // temp buffer reused during shifts
  * @property {number} spawnProb
  * @property {number} bufferCols
  * @property {number} bufferRows
@@ -87,6 +89,8 @@ export function init(cfg, rng) {
     strength,
     strengthNext: new Uint8Array(size).fill(1),
     lastClear: new Float32Array(size).fill(-1e9),
+    tmpStrength: new Uint8Array(size),
+    tmpLastClear: new Float32Array(size),
 
     spawnProb: cfg.spawnProb,
     bufferCols: cfg.bufferCols,
@@ -381,17 +385,16 @@ function regrowStep(s, now, regrowDelay, baseChance) {
 }
 
 function shift(m, dx, dy) {
-  const { cols, rows, strength, strengthNext, lastClear, spawnProb } = m;
+  const { cols, rows, strength, lastClear, spawnProb } = m;
   const diff = m.targetCoverage - m.coverage;
   const spawnChance = Math.max(0, Math.min(1, spawnProb * (1 + diff)));
 
   // When shifting, we must move both strength and lastClear.
-  // We don't need strengthNext during shifting, but keep it in sync by ignoring it here;
-  // it’s only used as a double buffer during regrow ticks.
+  // strengthNext is only used as a double buffer during regrow ticks.
 
-  // Create temporary buffers to write the shifted result.
-  const tmpStrength = new Uint8Array(m.size);
-  const tmpLastClear = new Float32Array(m.size);
+  // Reuse temporary buffers to avoid per-shift allocations.
+  const tmpStrength = m.tmpStrength;
+  const tmpLastClear = m.tmpLastClear;
 
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {

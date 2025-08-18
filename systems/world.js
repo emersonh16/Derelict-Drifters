@@ -1,7 +1,7 @@
 // systems/world.js
 /** @typedef {import('../core/state.js').MiasmaState} MiasmaState */
 /** @typedef {import('../core/state.js').WorldState} WorldState */
-import { isoProject, isoProjectTile } from "../core/iso.js";
+import { isoProject, isoProjectTile, worldFromIso } from "../core/iso.js";
 
 export function init(miasma, player, opts = {}, rng) {
   const t = miasma.tile;
@@ -167,12 +167,46 @@ export function draw(drawables, miasma, obstacleGrid, camera) {
   const t = miasma.tile;
   const cols = miasma.cols;
   const rows = miasma.rows;
+  const halfCols = miasma.halfCols;
+  const halfRows = miasma.halfRows;
 
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
+  // Determine visible world bounds from camera and canvas size
+  const w = camera.cx * 2;
+  const h = camera.cy * 2;
+  const corners = [
+    worldFromIso(0, 0, camera),
+    worldFromIso(w, 0, camera),
+    worldFromIso(0, h, camera),
+    worldFromIso(w, h, camera),
+  ];
+
+  let minX = Infinity,
+    maxX = -Infinity,
+    minY = Infinity,
+    maxY = -Infinity;
+  for (const c of corners) {
+    if (c.x < minX) minX = c.x;
+    if (c.x > maxX) maxX = c.x;
+    if (c.y < minY) minY = c.y;
+    if (c.y > maxY) maxY = c.y;
+  }
+
+  let minCol = Math.floor(minX / t) + halfCols;
+  let maxCol = Math.ceil(maxX / t) + halfCols;
+  let minRow = Math.floor(minY / t) + halfRows;
+  let maxRow = Math.ceil(maxY / t) + halfRows;
+
+  // Clamp to grid bounds
+  minCol = Math.max(0, minCol);
+  maxCol = Math.min(cols - 1, maxCol);
+  minRow = Math.max(0, minRow);
+  maxRow = Math.min(rows - 1, maxRow);
+
+  for (let row = minRow; row <= maxRow; row++) {
+    for (let col = minCol; col <= maxCol; col++) {
       const idx = row * cols + col;
       if (obstacleGrid[idx] === 1) {
-        const proj = isoProjectTile(col - miasma.halfCols, row - miasma.halfRows, t, camera);
+        const proj = isoProjectTile(col - halfCols, row - halfRows, t, camera);
         drawables.push({
           x: proj.x,
           y: proj.y,

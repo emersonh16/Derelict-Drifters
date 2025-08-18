@@ -2,6 +2,21 @@
 import { config } from '../core/config.js';
 
 let coverageDisplay = 0;
+const prev = {
+  hp: -1,
+  maxHp: -1,
+  hpPct: -1,
+  energyPct: -1,
+  heatPct: -1,
+  heatColor: '',
+  scrap: -1,
+  windDeg: -1,
+  windText: '',
+  coverageHeight: '',
+  coverageText: -1,
+};
+let lastUpdate = 0;
+const HUD_UPDATE_INTERVAL = 100; // ms
 
 function compassDir(deg) {
   const dirs = ['N','NE','E','SE','S','SW','W','NW'];
@@ -88,47 +103,85 @@ export function initHUD(state, opts = {}) {
 /** @param {GameState} state */
 export function updateHUD(state) {
   if (!els) return;
+  const now = performance.now();
+  if (now - lastUpdate < HUD_UPDATE_INTERVAL) return;
+  lastUpdate = now;
 
   // --- Health ---
-  var hp = Math.round((state && typeof state.health === 'number') ? state.health : 0);
-  var mx = Math.round((state && typeof state.maxHealth === 'number') ? state.maxHealth : (hp || 1));
-  els.hpNum.textContent = hp + '/' + mx;
+  const hp = Math.round((state && typeof state.health === 'number') ? state.health : 0);
+  const mx = Math.round((state && typeof state.maxHealth === 'number') ? state.maxHealth : (hp || 1));
+  if (hp !== prev.hp || mx !== prev.maxHp) {
+    els.hpNum.textContent = hp + '/' + mx;
+    prev.hp = hp;
+    prev.maxHp = mx;
+  }
 
-  var denom = (state && typeof state.maxHealth === 'number') ? state.maxHealth : 1;
+  let denom = (state && typeof state.maxHealth === 'number') ? state.maxHealth : 1;
   if (!denom) denom = 1;
-  var num = (state && typeof state.health === 'number') ? state.health : 0;
-  var pct = Math.max(0, Math.min(1, num / denom));
-  els.hpFill.style.width = (pct * 100).toFixed(1) + '%';
+  const num = (state && typeof state.health === 'number') ? state.health : 0;
+  const pct = Math.max(0, Math.min(1, num / denom));
+  if (pct !== prev.hpPct) {
+    els.hpFill.style.width = (pct * 100).toFixed(1) + '%';
+    prev.hpPct = pct;
+  }
 
   // --- Laser Energy ---
-  var energyPct = Math.max(0, Math.min(1, state.laserEnergy / state.maxLaserEnergy));
-  els.laserFill.style.width = (energyPct * 100).toFixed(1) + '%';
+  const energyPct = Math.max(0, Math.min(1, state.laserEnergy / state.maxLaserEnergy));
+  if (energyPct !== prev.energyPct) {
+    els.laserFill.style.width = (energyPct * 100).toFixed(1) + '%';
+    prev.energyPct = energyPct;
+  }
 
   // --- Drill Heat ---
-  var heatPct = Math.max(0, Math.min(1, state.drillHeat / state.maxDrillHeat));
-  els.heatFill.style.width = (heatPct * 100).toFixed(1) + '%';
-  var heatColor = config.drill.heatColorCold;
+  const heatPct = Math.max(0, Math.min(1, state.drillHeat / state.maxDrillHeat));
+  if (heatPct !== prev.heatPct) {
+    els.heatFill.style.width = (heatPct * 100).toFixed(1) + '%';
+    prev.heatPct = heatPct;
+  }
+  let heatColor = config.drill.heatColorCold;
   if (heatPct > 0.66) heatColor = config.drill.heatColorHot;
   else if (heatPct > 0.33) heatColor = config.drill.heatColorWarm;
-  els.heatFill.style.background = heatColor;
+  if (heatColor !== prev.heatColor) {
+    els.heatFill.style.background = heatColor;
+    prev.heatColor = heatColor;
+  }
 
   // --- Scrap ---
-  var scrap = Math.round((state && typeof state.scrap === 'number') ? state.scrap : 0);
-  els.scrapNum.textContent = scrap;
+  const scrap = Math.round((state && typeof state.scrap === 'number') ? state.scrap : 0);
+  if (scrap !== prev.scrap) {
+    els.scrapNum.textContent = scrap;
+    prev.scrap = scrap;
+  }
 
   // --- Wind ---
   if (els.windArrow && els.windText && state.wind) {
     let deg = (state.wind.direction * 180 / Math.PI) % 360;
     if (deg < 0) deg += 360;
-    els.windArrow.style.transform = `rotate(${deg}deg)`;
-    els.windText.textContent = compassDir(deg);
+    const rounded = Math.round(deg);
+    if (rounded !== prev.windDeg) {
+      els.windArrow.style.transform = `rotate(${rounded}deg)`;
+      prev.windDeg = rounded;
+    }
+    const dirTxt = compassDir(rounded);
+    if (dirTxt !== prev.windText) {
+      els.windText.textContent = dirTxt;
+      prev.windText = dirTxt;
+    }
   }
 
   // --- Miasma coverage ---
   if (els.miasmaBar && els.miasmaText && state.miasma) {
     const actual = Math.max(0, Math.min(1, state.miasma.coverage || 0));
     coverageDisplay += (actual - coverageDisplay) * 0.1;
-    els.miasmaBar.style.height = (coverageDisplay * 100).toFixed(1) + '%';
-    els.miasmaText.textContent = Math.round(actual * 100) + '%';
+    const barH = (coverageDisplay * 100).toFixed(1);
+    if (barH !== prev.coverageHeight) {
+      els.miasmaBar.style.height = barH + '%';
+      prev.coverageHeight = barH;
+    }
+    const txt = Math.round(actual * 100);
+    if (txt !== prev.coverageText) {
+      els.miasmaText.textContent = txt + '%';
+      prev.coverageText = txt;
+    }
   }
 }
