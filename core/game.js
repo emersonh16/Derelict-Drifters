@@ -161,8 +161,9 @@ function update(dt) {
   state.camera.x += (state.player.x - state.camera.x) * followSpeed * dt;
   state.camera.y += (state.player.y - state.camera.y) * followSpeed * dt;
 
-  // Clamp player inside world bounds
-  world.update(state.world, state.player, state.player);
+  // Keep player and camera within the world bounds
+  world.clampEntityToWorld(state.world, state.player);
+  world.clampCameraToWorld(state.world, state.camera, state.player);
 
   // --- Drill carving ---
   if (state.activeWeapon === "drill" && state.drill && !state.drillOverheated) {
