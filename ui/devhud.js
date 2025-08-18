@@ -42,7 +42,7 @@ export function initDevHUD(state) {
     </label>
   `;
 
-  els = {
+   els = {
     mode: root.querySelector("#dev-wind-mode"),
     dir: root.querySelector("#dev-wind-dir"),
     dirVal: root.querySelector("#dev-wind-dir-val"),
@@ -53,14 +53,20 @@ export function initDevHUD(state) {
   };
 
   // Live label updates while dragging
+  els.mode.addEventListener("change", () => {
+    applyDevHUD(state);
+  });
   els.dir.addEventListener("input", () => {
     els.dirVal.textContent = `${els.dir.value}°`;
+    applyDevHUD(state);
   });
   els.speed.addEventListener("input", () => {
     els.speedVal.textContent = `${els.speed.value}`;
+    applyDevHUD(state);
   });
   els.spawn.addEventListener("input", () => {
     els.spawnVal.textContent = Number(els.spawn.value).toFixed(2);
+    applyDevHUD(state);
   });
 
   // Initial sync from state → inputs (once)
@@ -100,8 +106,6 @@ function primeFromState(state) {
 export function updateDevHUD(state, dt = 0) {
   if (!els || !state.wind || !state.miasma) return;
 
-  // We still only show HUD while paused, but don't clobber user edits.
-  if (!state.paused) return;
 
   // If the user is currently editing a control, do NOT overwrite its value.
   const a = document.activeElement;
