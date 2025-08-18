@@ -37,10 +37,7 @@ export function updateWind(wind, dt, cfg) {
 
   wind.driftTimer += dt;
 
-  // Apply small random jitter each frame
-  wind.targetDir += (Math.random() * 2 - 1) * cfg.smallJitter * dt;
-
- // When timer exceeds interval, add a large shift and randomize speed
+  // When timer exceeds interval, add a large shift and randomize speed
   if (wind.driftTimer >= cfg.bigShiftInterval) {
     wind.driftTimer = 0;
 
@@ -48,7 +45,7 @@ export function updateWind(wind, dt, cfg) {
     wind.targetSpeed = cfg.minSpeed + Math.random() * (cfg.maxSpeed - cfg.minSpeed);
 
     // Debug log
-       console.log("[wind] big shift:", wind.targetDir.toFixed(2), wind.targetSpeed.toFixed(2));
+    console.log("[wind] big shift:", wind.targetDir.toFixed(2), wind.targetSpeed.toFixed(2));
   }
 
   // Smoothly interpolate current toward target
