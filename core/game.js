@@ -159,6 +159,7 @@ function update(dt) {
 
   // --- Wind ---
   wind.updateWind(state.wind, dt, config.wind);
+
   if (state.miasmaEnabled) {
     miasma.updateMiasma(state.miasma, state.wind, dt);
   }
