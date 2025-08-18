@@ -65,7 +65,7 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "1") state.activeWeapon = "beam";
   if (e.key === "2") state.activeWeapon = "drill";
   if (e.key.toLowerCase() === "m") state.miasmaEnabled = !state.miasmaEnabled; // testing toggle
-    if (e.key.toLowerCase() === "n") state.useCrystalRegrow = !state.useCrystalRegrow;
+  if (e.key.toLowerCase() === "n") config.dynamicMiasma.regrowEnabled = !config.dynamicMiasma.regrowEnabled; // single binary regrow toggle
 });
 
 function togglePause() {
@@ -100,7 +100,6 @@ window.addEventListener("keydown", (e) => {
 function startGame() {
   // --- Base run/reset ---
   state.miasmaEnabled = true;
-  state.useCrystalRegrow = false;
   state.time = 0;
   state.dt = 0;
   state.keys.clear();
@@ -120,6 +119,7 @@ function startGame() {
   state.health = state.maxHealth;
   state.scrap = 0;
   state.pickups.length = 0;
+
   // Player starts at origin
   state.player.x = 0;
   state.player.y = 0;
@@ -129,7 +129,6 @@ function startGame() {
   state.camera.y = state.player.y;
   state.cameraVel.x = 0;
   state.cameraVel.y = 0;
-
 
   // Mouse centered (like a fresh load)
   state.mouse.x = canvas.width / 2;
@@ -178,16 +177,10 @@ function update(dt) {
 
   miasma.updateTargetCoverage(state.miasma, dt, config.weather.density);
 
-if (state.miasmaEnabled) {
-  miasma.updateMiasma(state.miasma, state.wind, dt);
-   if (state.useCrystalRegrow) {
-    miasma.regrowMiasmaCrystal(
-      state.miasma,
-      config.dynamicMiasma,
-      state.time,
-      dt
-    );
-  } else {
+  if (state.miasmaEnabled) {
+    miasma.updateMiasma(state.miasma, state.wind, dt);
+
+    // Single binary regrow path (gated by config.dynamicMiasma.regrowEnabled)
     miasma.regrowMiasma(
       state.miasma,
       config.dynamicMiasma,
@@ -195,25 +188,24 @@ if (state.miasmaEnabled) {
       dt
     );
   }
-}
 
   // movement
-// --- Non-floaty WASD using existing state.keys; move the CAMERA ---
-{
-  const ax = (state.keys.has('d') || state.keys.has('arrowright') ? 1 : 0)
-           - (state.keys.has('a') || state.keys.has('arrowleft')  ? 1 : 0);
-  const ay = (state.keys.has('s') || state.keys.has('arrowdown')  ? 1 : 0)
-           - (state.keys.has('w') || state.keys.has('arrowup')    ? 1 : 0);
+  // --- Non-floaty WASD using existing state.keys; move the PLAYER ---
+  {
+    const ax = (state.keys.has('d') || state.keys.has('arrowright') ? 1 : 0)
+             - (state.keys.has('a') || state.keys.has('arrowleft')  ? 1 : 0);
+    const ay = (state.keys.has('s') || state.keys.has('arrowdown')  ? 1 : 0)
+             - (state.keys.has('w') || state.keys.has('arrowup')    ? 1 : 0);
 
-  if (ax !== 0 || ay !== 0) {
-    const len = Math.hypot(ax, ay);
-    const nx = ax / len, ny = ay / len; // diagonals not faster
-    const speed = 200; // px/sec; make a config knob later if you want
+    if (ax !== 0 || ay !== 0) {
+      const len = Math.hypot(ax, ay);
+      const nx = ax / len, ny = ay / len; // diagonals not faster
+      const speed = 200; // px/sec; make a config knob later if you want
 
-    state.player.x += nx * speed * dt;
-    state.player.y += ny * speed * dt;
+      state.player.x += nx * speed * dt;
+      state.player.y += ny * speed * dt;
+    }
   }
-}
 
   // Rock collision for player
   collideWithObstacles(
@@ -223,15 +215,13 @@ if (state.miasmaEnabled) {
     state.player.r
   );
 
+  // Camera smoothly follows player
+  const followSpeed = 10; // higher = snappier, lower = floatier
+  state.camera.x += (state.player.x - state.camera.x) * followSpeed * dt;
+  state.camera.y += (state.player.y - state.camera.y) * followSpeed * dt;
 
-// Camera smoothly follows player
-const followSpeed = 10; // higher = snappier, lower = floatier
-state.camera.x += (state.player.x - state.camera.x) * followSpeed * dt;
-state.camera.y += (state.player.y - state.camera.y) * followSpeed * dt;
-
-
-// Clamp player inside world bounds
-world.clampToWorld(state.world, state.player, state.player);
+  // Clamp player inside world bounds
+  world.clampToWorld(state.world, state.player, state.player);
 
   // --- Drill carving ---
   if (state.activeWeapon === "drill" && state.drill && !state.drillOverheated) {
@@ -328,18 +318,12 @@ function draw() {
   const w = canvas.width, h = canvas.height;
   const cx = Math.round(w / 2);
   const cy = Math.round(h / 2);
-// Two coordinate spaces: one for grid/collision, one for smooth drawing
-const camLogic = {
-  x: Math.floor(state.camera.x),
-  y: Math.floor(state.camera.y),
-};
 
-const camDraw = {
-  x: state.camera.x,
-  y: state.camera.y,
-};
-
-
+  // Two coordinate spaces: one for grid/collision, one for smooth drawing
+  const camDraw = {
+    x: state.camera.x,
+    y: state.camera.y,
+  };
 
   ctx.fillStyle = "#0c0b10";
   ctx.fillRect(0, 0, w, h);
@@ -367,6 +351,7 @@ const camDraw = {
     drill.drawDrill(ctx, state.drill, state.mouse, state.activeWeapon, cx, cy, state.drillOverheated);
   }
 
+  // NOTE: Player sprite currently drawn at screen center (existing behavior).
   ctx.fillStyle = "#9a3b31";
   ctx.beginPath();
   ctx.arc(cx, cy, state.player.r, 0, Math.PI * 2);

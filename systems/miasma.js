@@ -2,7 +2,7 @@ import { smoothNoise } from "./smooth-noise.js";
 
 // systems/miasma.js
 /**
- * Conveyor-belt style miasma grid + OLD-STYLE REGROWTH.
+ * Conveyor-belt style miasma grid + regrowth.
  * - Grid drifts in whole tiles based on wind.
  * - Clearing records timestamps.
  * - Regrowth happens in ticks, using a double buffer and
@@ -11,9 +11,8 @@ import { smoothNoise } from "./smooth-noise.js";
  * Exports:
  *  - initMiasma(cfg)
  *  - updateMiasma(m, wind, dt)
- *  - regrowMiasma(m, cfg, time, dt)
+ *  - regrowMiasma(m, cfg, time, dt)   // single regrow path
  *  - drawMiasma(ctx, m, cam, cx, cy, w, h)
- *  - regrowMiasmaCrystal(m, cfg, time, dt)
  *  - worldToIdx(m, wx, wy)
  *  - isFog(m, idx)
  *  - clearWithBeam(m, beamState, camera, time, cx, cy)
@@ -155,7 +154,7 @@ export function updateTargetCoverage(m, dt, densityCfg) {
 }
 
 /**
- * OLD-STYLE regrowth tick (adjacency biased, double buffer).
+ * Regrowth tick (adjacency biased, double buffer).
  * Call this after updateMiasma in the main loop.
  *
  * cfg fields (from config.dynamicMiasma):
@@ -178,34 +177,6 @@ export function regrowMiasma(m, cfg, time, dt) {
     m.coverage = getCoveragePercent(m);
   }
 }
-
-/**
- * Crystal-style regrowth tick. Instead of combining probabilities from all
- * adjacent fog tiles, each existing fog tile attempts to grow into a single
- * random neighbour. This tends to produce long "crystal" fingers. Call this
- * after updateMiasma in the main loop when crystal regrowth is enabled.
- *
- * cfg fields (from config.dynamicMiasma):
- *  - regrowEnabled: boolean
- *  - regrowDelay:   seconds
- *  - baseChance:    probability per tick for a fog tile to expand
- *  - tickHz:        ticks per second
- */
-export function regrowMiasmaCrystal(m, cfg, time, dt) {
-  if (!cfg || !cfg.regrowEnabled) return;
-
-  const tickHz = cfg.tickHz || 8;
-  const step = 1 / tickHz;
-  m.regrowTimer += dt;
-  while (m.regrowTimer >= step) {
-    m.regrowTimer -= step;
-    const diff = m.targetCoverage - m.coverage;
-    const chance = Math.max(0, Math.min(1, (cfg.baseChance ?? 0.20) * (1 + diff)));
-    crystalRegrowStep(m, time, cfg.regrowDelay ?? 1.0, chance);
-    m.coverage = getCoveragePercent(m);
-  }
-}
-
 
 /**
  * Draw fog tiles aligned to world pixel grid (centered grid).
@@ -294,7 +265,6 @@ function rayStampWorld(s, oxW, oyW, ang, range, thickness, now) {
   }
 }
 
-
 /**
  * Clear tiles intersecting the beam shape in world space.
  * Records lastClear for regrowDelay.
@@ -375,42 +345,7 @@ export function clearWithBeam(m, beamState, camera, time, cx, cy) {
   }
 }
 
-
 /* ---------------- Internals ---------------- */
-
-function crystalRegrowStep(s, now, regrowDelay, baseChance) {
-  const prev = s.strength;
-  const next = s.strengthNext;
-  next.set(prev);
-
-  const cols = s.cols, rows = s.rows;
-
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < cols; x++) {
-      const i = y * cols + x;
-      if (prev[i] !== 1) continue;
-
-      if (Math.random() >= baseChance) continue;
-
-      let nx = x, ny = y;
-      const dir = Math.floor(Math.random() * 4);
-      if (dir === 0) nx++;
-      else if (dir === 1) nx--;
-      else if (dir === 2) ny++;
-      else ny--;
-
-      if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
-      const ni = ny * cols + nx;
-      if (prev[ni] === 1) continue;
-      if ((now - s.lastClear[ni]) < regrowDelay) continue;
-      next[ni] = 1;
-    }
-  }
-
-  s.strength = next;
-  s.strengthNext = prev;
-}
-
 
 function regrowStep(s, now, regrowDelay, baseChance) {
   const prev = s.strength;
@@ -455,80 +390,35 @@ function shift(m, dx, dy) {
 
   // When shifting, we must move both strength and lastClear.
   // We don't need strengthNext during shifting, but keep it in sync by ignoring it here;
-  // it will be overwritten on the next regrow step (next.set(prev)).
+  // it’s only used as a double buffer during regrow ticks.
 
-  if (dx) {
-    const step = Math.sign(dx);
-    while (dx !== 0) {
-      for (let y = 0; y < rows; y++) {
-        if (step > 0) {
-          // shift right: copy from left neighbor
-          for (let x = cols - 1; x > 0; x--) {
-            const to = y * cols + x;
-            const from = y * cols + (x - 1);
-            strength[to]   = strength[from];
-            lastClear[to]  = lastClear[from];
-          }
-          // new leftmost column
-          const idx = y * cols;
-          strength[idx]  = Math.random() < spawnChance ? 1 : 0;
-          lastClear[idx] = 0;
-        } else {
-          // shift left: copy from right neighbor
-          for (let x = 0; x < cols - 1; x++) {
-            const to = y * cols + x;
-            const from = y * cols + (x + 1);
-            strength[to]   = strength[from];
-            lastClear[to]  = lastClear[from];
-          }
-          // new rightmost column
-          const idx = y * cols + (cols - 1);
-          strength[idx]  = Math.random() < spawnChance ? 1 : 0;
-          lastClear[idx] = 0;
-        }
-      }
-      dx -= step;
-    }
-  }
+  // Create temporary buffers to write the shifted result.
+  const tmpStrength = new Uint8Array(m.size);
+  const tmpLastClear = new Float32Array(m.size);
 
-  if (dy) {
-    const step = Math.sign(dy);
-    while (dy !== 0) {
-      if (step > 0) {
-        // shift down: copy from row above
-        for (let y = rows - 1; y > 0; y--) {
-          for (let x = 0; x < cols; x++) {
-            const to = y * cols + x;
-            const from = (y - 1) * cols + x;
-            strength[to]   = strength[from];
-            lastClear[to]  = lastClear[from];
-          }
-        }
-        // new top row
-        for (let x = 0; x < cols; x++) {
-          const idx = x;
-          strength[idx]  = Math.random() < spawnChance ? 1 : 0;
-          lastClear[idx] = 0;
-        }
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const srcX = x - dx;
+      const srcY = y - dy;
+
+      const di = y * cols + x;
+
+      if (srcX >= 0 && srcX < cols && srcY >= 0 && srcY < rows) {
+        const si = srcY * cols + srcX;
+        tmpStrength[di]  = strength[si];
+        tmpLastClear[di] = lastClear[si];
       } else {
-        // shift up: copy from row below
-        for (let y = 0; y < rows - 1; y++) {
-          for (let x = 0; x < cols; x++) {
-            const to = y * cols + x;
-            const from = (y + 1) * cols + x;
-            strength[to]   = strength[from];
-            lastClear[to]  = lastClear[from];
-          }
-        }
-        // new bottom row
-        const base = (rows - 1) * cols;
-        for (let x = 0; x < cols; x++) {
-          const idx = base + x;
-          strength[idx]  = Math.random() < spawnChance ? 1 : 0;
-          lastClear[idx] = 0;
-        }
+        // Spawn new content on the entering edge.
+        tmpStrength[di]  = Math.random() < spawnChance ? 1 : 0;
+        tmpLastClear[di] = -1e9; // effectively "long ago"
       }
-      dy -= step;
     }
   }
+
+  // Commit the shifted data back.
+  strength.set(tmpStrength);
+  lastClear.set(tmpLastClear);
+
+  // Recompute coverage in the active bubble after shifts.
+  m.coverage = getCoveragePercent(m);
 }
