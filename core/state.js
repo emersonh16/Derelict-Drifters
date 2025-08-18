@@ -142,7 +142,7 @@
  * @property {number} dt
  * @property {Vec2} mouse
  * @property {Vec2} pendingMouse
- * @property {Vec2} camera
+ * @property {{x:number,y:number,cx:number,cy:number,isoX:number,isoY:number}} camera
  * @property {Vec2} cameraVel
  * @property {{r:number}} player
  * @property {Set<string>} keys
@@ -185,7 +185,7 @@ export function createGameState() {
     time: 0, dt: 0,
     mouse: { x: 0, y: 0 },
     pendingMouse: { x: 0, y: 0 },
-    camera: { x: 0, y: 0 },
+    camera: { x: 0, y: 0, cx: 0, cy: 0, isoX: 0, isoY: 0 },
     cameraVel: { x: 0, y: 0 },
     player: { r: 18 },
     keys: new Set(),

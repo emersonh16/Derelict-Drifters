@@ -1,6 +1,7 @@
 // systems/world.js
 /** @typedef {import('../core/state.js').MiasmaState} MiasmaState */
 /** @typedef {import('../core/state.js').WorldState} WorldState */
+import { isoProject, isoProjectTile } from "../core/iso.js";
 
 export function initWorld(miasma, player, opts = {}) {
   const t = miasma.tile;
@@ -107,49 +108,34 @@ export function clampToWorld(world, camera, player) {
   camera.y = clamp(camera.y, world.minY + r, world.maxY - r);
 }
 
-export function drawWorldBorder(ctx, world, camera, cx, cy) {
+export function drawWorldBorder(ctx, world, camera) {
   if (!world) return;
   const thickness = world.borderThickness;
   const color = world.borderColor;
 
+  const tl = isoProject(world.minX, world.minY, camera);
+  const tr = isoProject(world.maxX, world.minY, camera);
+  const br = isoProject(world.maxX, world.maxY, camera);
+  const bl = isoProject(world.minX, world.maxY, camera);
+
   ctx.save();
-  ctx.fillStyle = color;
-
-  ctx.fillRect(
-    world.minX - camera.x + cx - thickness,
-    world.minY - thickness - camera.y + cy,
-    (world.maxX - world.minX) + thickness * 2,
-    thickness
-  );
-  ctx.fillRect(
-    world.minX - camera.x + cx - thickness,
-    world.maxY - camera.y + cy,
-    (world.maxX - world.minX) + thickness * 2,
-    thickness
-  );
-  ctx.fillRect(
-    world.minX - thickness - camera.x + cx,
-    world.minY - camera.y + cy,
-    thickness,
-    (world.maxY - world.minY)
-  );
-  ctx.fillRect(
-    world.maxX - camera.x + cx,
-    world.minY - camera.y + cy,
-    thickness,
-    (world.maxY - world.minY)
-  );
-
+  ctx.strokeStyle = color;
+  ctx.lineWidth = thickness;
+  ctx.beginPath();
+  ctx.moveTo(tl.x, tl.y);
+  ctx.lineTo(tr.x, tr.y);
+  ctx.lineTo(br.x, br.y);
+  ctx.lineTo(bl.x, bl.y);
+  ctx.closePath();
+  ctx.stroke();
   ctx.restore();
 }
 
 // Draw rock tiles
-export function drawObstacles(ctx, miasma, obstacleGrid, camera, cx, cy) {
+export function drawObstacles(ctx, miasma, obstacleGrid, camera) {
   const t = miasma.tile;
   const cols = miasma.cols;
   const rows = miasma.rows;
-  const px = camera.x;
-  const py = camera.y;
 
   ctx.save();
   ctx.fillStyle = "#444";
@@ -158,9 +144,8 @@ export function drawObstacles(ctx, miasma, obstacleGrid, camera, cx, cy) {
     for (let col = 0; col < cols; col++) {
       const idx = row * cols + col;
       if (obstacleGrid[idx] === 1) {
-        const x = col * t - miasma.halfCols * t;
-        const y = row * t - miasma.halfRows * t;
-        ctx.fillRect(x - px + cx, y - py + cy, t, t);
+        const proj = isoProjectTile(col - miasma.halfCols, row - miasma.halfRows, t, camera);
+        ctx.fillRect(proj.x, proj.y, t, t);
       }
     }
   }

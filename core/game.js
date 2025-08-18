@@ -5,6 +5,7 @@ import { collideWithObstacles } from "../systems/world.js";
 import { hud, devhud } from "../ui/index.js";
 import { createGameState } from "./state.js";
 import { applyDevHUD } from "../ui/devhud.js";
+import { isoProject } from "./iso.js";
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d", { alpha: false });
@@ -28,6 +29,8 @@ function resize() {
   state.mouse.y = canvas.height / 2;
   state.pendingMouse.x = state.mouse.x;
   state.pendingMouse.y = state.mouse.y;
+  state.camera.cx = canvas.width / 2;
+  state.camera.cy = canvas.height / 2;
 }
 window.addEventListener("resize", resize);
 resize();
@@ -316,45 +319,50 @@ function update(dt) {
 // ---- Draw ----
 function draw() {
   const w = canvas.width, h = canvas.height;
-  const cx = Math.round(w / 2);
-  const cy = Math.round(h / 2);
+  state.camera.cx = Math.round(w / 2);
+  state.camera.cy = Math.round(h / 2);
 
   // Two coordinate spaces: one for grid/collision, one for smooth drawing
   const camDraw = {
     x: state.camera.x,
     y: state.camera.y,
+    cx: state.camera.cx,
+    cy: state.camera.cy,
+    isoX: state.camera.isoX,
+    isoY: state.camera.isoY,
   };
 
   ctx.fillStyle = "#0c0b10";
   ctx.fillRect(0, 0, w, h);
 
   if (state.activeWeapon === "beam") {
-    beam.update(state.beam, state.mouse, cx, cy);
+    beam.update(state.beam, state.mouse, state.camera.cx, state.camera.cy);
     if (state.miasmaEnabled && !state.paused && !state.gameOver) {
-      miasma.clearWithBeam(state.miasma, state.beam, state.camera, state.time, cx, cy);
+      miasma.clearWithBeam(state.miasma, state.beam, state.camera, state.time, state.camera.cx, state.camera.cy);
     }
   }
 
-  world.drawObstacles(ctx, state.miasma, state.obstacleGrid, camDraw, cx, cy);
-  enemies.drawEnemies(ctx, state, cx, cy);
-  pickups.drawPickups(ctx, state.pickups, camDraw, cx, cy);
+  world.drawObstacles(ctx, state.miasma, state.obstacleGrid, camDraw);
+  enemies.drawEnemies(ctx, state);
+  pickups.drawPickups(ctx, state.pickups, camDraw);
 
   if (state.miasmaEnabled) {
-    miasma.drawMiasma(ctx, state.miasma, camDraw, cx, cy, w, h);
+    miasma.drawMiasma(ctx, state.miasma, camDraw, w, h);
   }
 
-  world.drawWorldBorder(ctx, state.world, camDraw, cx, cy);
+  world.drawWorldBorder(ctx, state.world, camDraw);
 
   if (state.activeWeapon === "beam") {
-    beam.draw(ctx, state.beam, cx, cy);
+    beam.draw(ctx, state.beam, state.camera.cx, state.camera.cy);
   } else if (state.activeWeapon === "drill") {
-    drill.drawDrill(ctx, state.drill, state.mouse, state.activeWeapon, cx, cy, state.drillOverheated);
+    drill.drawDrill(ctx, state.drill, state.mouse, state.activeWeapon, state.camera.cx, state.camera.cy, state.drillOverheated);
   }
 
-  // NOTE: Player sprite currently drawn at screen center (existing behavior).
+  // Player sprite rendered via projection helper.
+  const playerPos = isoProject(state.camera.x, state.camera.y, camDraw);
   ctx.fillStyle = "#9a3b31";
   ctx.beginPath();
-  ctx.arc(cx, cy, state.player.r, 0, Math.PI * 2);
+  ctx.arc(playerPos.x, playerPos.y, state.player.r, 0, Math.PI * 2);
   ctx.fill();
 
   if (state.damageFlash > 0) {

@@ -2,6 +2,7 @@
 import { spawnPickup } from "./pickups.js";
 import { collideWithObstacles, pointInTriangle } from "./world.js";
 import { getDrillTriangleWorld } from "./drill.js";
+import { isoProject } from "../core/iso.js";
 /** @typedef {import('../core/state.js').GameState} GameState */
 
 export function initEnemies(miasma, opts = {}) {
@@ -207,15 +208,14 @@ export function updateEnemies(state, dt) {
 }
 
 /** @param {GameState} state */
-export function drawEnemies(ctx, state, cx, cy) {
+export function drawEnemies(ctx, state) {
   const cfg = state.enemies;
-  const px = state.camera.x, py = state.camera.y;
+  const cam = state.camera;
 
   for (const m of cfg.list) {
-    const sx = m.x - px + cx;
-    const sy = m.y - py + cy;
+    const proj = isoProject(m.x, m.y, cam);
     ctx.beginPath();
-    ctx.arc(sx, sy, m.r, 0, Math.PI * 2);
+    ctx.arc(proj.x, proj.y, m.r, 0, Math.PI * 2);
 
     if (m.type === "fast") {
       ctx.fillStyle = m.flash > 0 ? `rgba(255,255,255,${m.flash / cfg.flashTime})` : 'rgba(50,50,200,0.9)';
@@ -231,7 +231,7 @@ export function drawEnemies(ctx, state, cx, cy) {
     ctx.stroke();
   }
 
-  drawEnemyProjectiles(ctx, state, cx, cy);
+  drawEnemyProjectiles(ctx, state);
 }
 
 function spawnTankBullet(state, x, y, dx, dy) {
@@ -279,15 +279,13 @@ function updateEnemyProjectiles(state, dt) {
   }
 }
 
-function drawEnemyProjectiles(ctx, state, cx, cy) {
-  const px = state.camera.x;
-  const py = state.camera.y;
+function drawEnemyProjectiles(ctx, state) {
+  const cam = state.camera;
 
   for (const p of state.enemyProjectiles) {
-    const sx = p.x - px + cx;
-    const sy = p.y - py + cy;
+    const proj = isoProject(p.x, p.y, cam);
     ctx.save();
-    ctx.translate(sx, sy);
+    ctx.translate(proj.x, proj.y);
     ctx.rotate(Math.atan2(p.dy, p.dx));
 
     ctx.fillStyle = 'rgba(255,0,0,0.9)';

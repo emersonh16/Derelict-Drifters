@@ -1,4 +1,5 @@
 import { smoothNoise } from "./smooth-noise.js";
+import { isoProjectTile } from "../core/iso.js";
 
 // systems/miasma.js
 /**
@@ -12,7 +13,7 @@ import { smoothNoise } from "./smooth-noise.js";
  *  - initMiasma(cfg)
  *  - updateMiasma(m, wind, dt)
  *  - regrowMiasma(m, cfg, time, dt)   // single regrow path
- *  - drawMiasma(ctx, m, cam, cx, cy, w, h)
+ *  - drawMiasma(ctx, m, cam, w, h)
  *  - worldToIdx(m, wx, wy)
  *  - isFog(m, idx)
  *  - clearWithBeam(m, beamState, camera, time, cx, cy)
@@ -181,21 +182,15 @@ export function regrowMiasma(m, cfg, time, dt) {
 /**
  * Draw fog tiles aligned to world pixel grid (centered grid).
  */
-export function drawMiasma(ctx, m, cam, cx, cy, w, h) {
+export function drawMiasma(ctx, m, cam, w, h) {
   ctx.fillStyle = "rgba(180,120,255,1.0)";
   const t = m.tile;
-  const cxTiles = Math.floor(m.cols / 2);
-  const cyTiles = Math.floor(m.rows / 2);
 
-  const originX = -cxTiles * t;
-  const originY = -cyTiles * t;
-
-  for (let y = 0; y < m.rows; y++) {
-    const wy = ((originY + y * t - cam.y + cy) | 0);
-    for (let x = 0; x < m.cols; x++) {
-      if (m.strength[y * m.cols + x] !== 1) continue;
-      const wx = ((originX + x * t - cam.x + cx) | 0);
-      ctx.fillRect(wx, wy, t, t);
+  for (let row = 0; row < m.rows; row++) {
+    for (let col = 0; col < m.cols; col++) {
+      if (m.strength[row * m.cols + col] !== 1) continue;
+      const proj = isoProjectTile(col - m.halfCols, row - m.halfRows, t, cam);
+      ctx.fillRect(proj.x, proj.y, t, t);
     }
   }
 }
