@@ -1,6 +1,13 @@
 /** @typedef {import('../core/state.js').GameState} GameState */
 import { config } from '../core/config.js';
 
+let coverageDisplay = 0;
+
+function compassDir(deg) {
+  const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+  return dirs[Math.round(deg / 45) % 8];
+}
+
 var els = null;
 
 /** @param {GameState} state */
@@ -49,21 +56,19 @@ export function initHUD(state, opts = {}) {
     // Scrap
     `<div>Scrap: <span id="hud-scrap-num"></span></div>` +
 
-    // Wind (vane + degrees)
-    `<div style="margin-top:6px;">
-       Wind: <span id="hud-wind-deg">0°</span>
-       <span id="hud-wind-vane" style="display:inline-block;transform:rotate(0deg);margin-left:6px;">▲</span>
-     </div>` +
+    // Wind display
+    `<div style="margin-top:6px;display:flex;align-items:center;">` +
+      `<span id="hud-wind-arrow" style="display:inline-block;font-size:${fontSize*1.6}px;transform:rotate(0deg);">▲</span>` +
+      `<span id="hud-wind-text" style="margin-left:6px;">N</span>` +
+    `</div>` +
 
-    // Miasma intensity bar (spawn probability)
-    `<div style="margin-top:4px;">
-       <div style="position:relative;width:${barW}px;height:${barH}px;border-radius:6px;
-         background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);
-         overflow:hidden;">
-         <div id="hud-miasma-fill" style="position:absolute;left:0;top:0;bottom:0;width:0;background:#bb88ffcc;"></div>
-       </div>
-       <div style="font-size:${Math.max(10, fontSize-2)}px;opacity:0.85;margin-top:2px;">Fog intensity</div>
-     </div>`;
+    // Miasma coverage thermometer
+    `<div style="margin-top:6px;display:flex;align-items:flex-end;height:60px;">` +
+      `<div style="position:relative;width:16px;height:100%;border:1px solid rgba(255,255,255,0.18);margin-right:6px;">` +
+        `<div id="hud-miasma-bar" style="position:absolute;left:0;right:0;bottom:0;height:0;background:#bb88ffcc;"></div>` +
+      `</div>` +
+      `<span id="hud-miasma-text">0%</span>` +
+    `</div>`;
 
   els = {
     hpNum:      root.querySelector('#hud-hp-num'),
@@ -71,9 +76,10 @@ export function initHUD(state, opts = {}) {
     laserFill:  root.querySelector('#hud-laser-fill'),
     heatFill:   root.querySelector('#hud-heat-fill'),
     scrapNum:   root.querySelector('#hud-scrap-num'),
-    windDeg:    root.querySelector('#hud-wind-deg'),
-    windVane:   root.querySelector('#hud-wind-vane'),
-    miasmaFill: root.querySelector('#hud-miasma-fill'),
+    windArrow:  root.querySelector('#hud-wind-arrow'),
+    windText:   root.querySelector('#hud-wind-text'),
+    miasmaBar:  root.querySelector('#hud-miasma-bar'),
+    miasmaText: root.querySelector('#hud-miasma-text'),
   };
 
   updateHUD(state);
@@ -110,18 +116,19 @@ export function updateHUD(state) {
   var scrap = Math.round((state && typeof state.scrap === 'number') ? state.scrap : 0);
   els.scrapNum.textContent = scrap;
 
-  // --- Wind (direction readout + vane) ---
-  if (els.windDeg && els.windVane && state.wind) {
+  // --- Wind ---
+  if (els.windArrow && els.windText && state.wind) {
     let deg = (state.wind.direction * 180 / Math.PI) % 360;
     if (deg < 0) deg += 360;
-    els.windDeg.textContent = Math.round(deg) + '°';
-    els.windVane.style.transform = `rotate(${deg}deg)`;
+    els.windArrow.style.transform = `rotate(${deg}deg)`;
+    els.windText.textContent = compassDir(deg);
   }
 
-  // --- Miasma intensity (spawn probability) ---
-  if (els.miasmaFill) {
-    const prob = (state.miasma && typeof state.miasma.spawnProb === 'number')
-      ? state.miasma.spawnProb : 0;
-    els.miasmaFill.style.width = (Math.max(0, Math.min(1, prob)) * 100).toFixed(1) + '%';
+  // --- Miasma coverage ---
+  if (els.miasmaBar && els.miasmaText && state.miasma) {
+    const actual = Math.max(0, Math.min(1, state.miasma.coverage || 0));
+    coverageDisplay += (actual - coverageDisplay) * 0.1;
+    els.miasmaBar.style.height = (coverageDisplay * 100).toFixed(1) + '%';
+    els.miasmaText.textContent = Math.round(actual * 100) + '%';
   }
 }

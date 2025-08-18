@@ -129,7 +129,7 @@ function startGame() {
   state.pendingMouse.y = state.mouse.y;
 
   // --- Wind first ---
-  state.wind = wind.initWind(config.wind);
+  state.wind = wind.initWind(config.weather.wind);
 
   // --- World + systems ---
   state.miasma = miasma.initMiasma(config.dynamicMiasma);
@@ -158,11 +158,19 @@ function update(dt) {
   state.drillDidHit = false;
 
   // --- Wind ---
-  wind.updateWind(state.wind, dt, config.wind);
+  wind.updateWind(state.wind, dt, config.weather.wind);
+
+  // simulation bubble around viewport
+  const bubble = state.miasma.bubble;
+  bubble.minX = state.camera.x - canvas.width / 2 - config.weather.bubble.marginX;
+  bubble.maxX = state.camera.x + canvas.width / 2 + config.weather.bubble.marginX;
+  bubble.minY = state.camera.y - canvas.height / 2 - config.weather.bubble.marginY;
+  bubble.maxY = state.camera.y + canvas.height / 2 + config.weather.bubble.marginY;
+
+  miasma.updateTargetCoverage(state.miasma, dt, config.weather.density);
 
 if (state.miasmaEnabled) {
   miasma.updateMiasma(state.miasma, state.wind, dt);
-  // NEW: regrow cleared tiles over time
   miasma.regrowMiasma(
     state.miasma,
     config.dynamicMiasma,

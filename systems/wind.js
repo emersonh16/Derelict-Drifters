@@ -1,4 +1,5 @@
 // systems/wind.js
+import { smoothNoise } from "./smooth-noise.js";
 
 /**
  * @typedef {Object} WindState
@@ -8,18 +9,22 @@
  * @property {number} driftTimer
  * @property {number} targetDir
  * @property {number} targetSpeed
+ * @property {number} t
+ * @property {number} dirSeed
+ * @property {number} spdSeed
  */
 
 /**
  * Initialize the wind system.
- * @param {import("../core/config.js").config["wind"]} cfg
+ * @param {import("../core/config.js").config["weather"]["wind"]} cfg
  * @returns {WindState}
  */
-// systems/wind.js
 export function initWind(cfg) {
-  // Seed immediate motion so wind is alive from frame 1.
-  const dir = Math.random() * Math.PI * 2;
-  const spd = cfg.minSpeed + Math.random() * Math.max(0, cfg.maxSpeed - cfg.minSpeed);
+  const dirSeed = Math.random() * 1000;
+  const spdSeed = Math.random() * 1000;
+  const t = Math.random() * 1000;
+  const dir = smoothNoise(t, dirSeed, cfg.dirNoiseScale) * Math.PI;
+  const spd = cfg.minSpeed + ((smoothNoise(t, spdSeed, cfg.speedNoiseScale) + 1) * 0.5) * (cfg.maxSpeed - cfg.minSpeed);
   return {
     direction: dir,
     speed: spd,
@@ -27,56 +32,47 @@ export function initWind(cfg) {
     driftTimer: 0,
     targetDir: dir,
     targetSpeed: spd,
+    t,
+    dirSeed,
+    spdSeed,
   };
 }
-
-
-/**
- * Update the wind state.
- * @param {WindState} wind
- * @param {number} dt
- * @param {import("../core/config.js").config["wind"]} cfg
- */
-// systems/wind.js
 
 /**
  * Wrap angle to (-PI, PI]
  */
 function wrapPi(a) {
   while (a <= -Math.PI) a += Math.PI * 2;
-  while (a >   Math.PI) a -= Math.PI * 2;
+  while (a > Math.PI) a -= Math.PI * 2;
   return a;
 }
 
 /**
- * Update the wind state (no small per-frame jitter).
- * Smoothly ease direction on the shortest arc to avoid wobble at 2π wrap.
- * @param {import("./wind.js").WindState} wind
+ * Update the wind state.
+ * @param {WindState} wind
  * @param {number} dt
- * @param {import("../core/config.js").config["wind"]} cfg
+ * @param {import("../core/config.js").config["weather"]["wind"]} cfg
  */
 export function updateWind(wind, dt, cfg) {
   if (wind.mode === "manual") return;
 
-  wind.driftTimer += dt;
+  wind.t += dt;
 
-  // Occasional big shift only
-  if (wind.driftTimer >= cfg.bigShiftInterval) {
-    wind.driftTimer = 0;
-    wind.targetDir   += (Math.random() * 2 - 1) * cfg.bigShiftMagnitude;
-    wind.targetSpeed  = cfg.minSpeed + Math.random() * (cfg.maxSpeed - cfg.minSpeed);
-    // (Optional) comment this out once tuned:
-    // console.log("[wind] big shift:", wind.targetDir.toFixed(2), wind.targetSpeed.toFixed(2));
+  // Noise driven targets
+  const nDir = smoothNoise(wind.t, wind.dirSeed, cfg.dirNoiseScale);
+  const nSpd = smoothNoise(wind.t, wind.spdSeed, cfg.speedNoiseScale);
+  wind.targetDir = nDir * Math.PI;
+  wind.targetSpeed = cfg.minSpeed + ((nSpd + 1) * 0.5) * (cfg.maxSpeed - cfg.minSpeed);
+
+  // Rare front shift
+  if (Math.random() < cfg.front.probabilityPerSecond * dt) {
+    const mag = cfg.front.magnitudeMinRad + Math.random() * (cfg.front.magnitudeMaxRad - cfg.front.magnitudeMinRad);
+    wind.targetDir += (Math.random() < 0.5 ? -1 : 1) * mag;
   }
 
-  // Smoothly interpolate current toward target
-  const lerp = Math.min(1, dt / cfg.smoothTime);
-
-  // --- angle-aware direction easing (shortest arc) ---
+  const k = 1 - Math.exp(-dt / cfg.smoothTime);
   const d = wrapPi(wind.targetDir - wind.direction);
-  wind.direction = wind.direction + d * lerp;
-
-  // Speed easing
-  wind.speed += (wind.targetSpeed - wind.speed) * lerp;
+  wind.direction += d * k;
+  wind.speed += (wind.targetSpeed - wind.speed) * k;
+  wind.speed = Math.max(cfg.minSpeed, Math.min(cfg.maxSpeed, wind.speed));
 }
-

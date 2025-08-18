@@ -91,13 +91,31 @@ export const config = {
     heatColorWarm: '#ffcc33',
     heatColorHot: '#ff3333'
   },
-
-  wind: {
-    minSpeed: 0,             // was 0.5
-    maxSpeed: 100,            // was 3
-    smoothTime: 0.9,         // was 5 (snappier response to targets)
-    bigShiftInterval: 10,  // sec between major shifts
-    bigShiftMagnitude: Math.PI // up to 180° turn
+  weather: {
+    density: {
+      cycleSecondsMin: 30,
+      cycleSecondsMax: 120,
+      noiseScale: 0.05,
+      response: 0.8,
+      min: 0.0,
+      max: 1.0
+    },
+    wind: {
+      dirNoiseScale: 0.08,
+      speedNoiseScale: 0.08,
+      minSpeed: 6,
+      maxSpeed: 28,
+      smoothTime: 1.2,
+      front: {
+        probabilityPerSecond: 0.01,
+        magnitudeMinRad: Math.PI * 0.35,
+        magnitudeMaxRad: Math.PI * 0.9
+      }
+    },
+    bubble: {
+      marginX: 256,
+      marginY: 256
+    }
   },
 
 dynamicMiasma: {

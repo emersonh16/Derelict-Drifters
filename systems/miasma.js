@@ -1,3 +1,5 @@
+import { smoothNoise } from "./smooth-noise.js";
+
 // systems/miasma.js
 /**
  * Conveyor-belt style miasma grid + OLD-STYLE REGROWTH.
@@ -34,6 +36,11 @@
  * @property {number} offsetX
  * @property {number} offsetY
  * @property {number} regrowTimer        // tick accumulator
+ * @property {number} coverage           // current coverage [0,1]
+ * @property {number} targetCoverage
+ * @property {number} densityT
+ * @property {number} densitySeed
+ * @property {{minX:number,maxX:number,minY:number,maxY:number}} bubble
  */
 
 export function initMiasma(cfg) {
@@ -86,7 +93,13 @@ export function initMiasma(cfg) {
     offsetX: 0,
     offsetY: 0,
 
-    regrowTimer: 0
+    regrowTimer: 0,
+
+    coverage: 0,
+    targetCoverage: 0,
+    densityT: 0,
+    densitySeed: Math.random() * 1000,
+    bubble: { minX:0, maxX:0, minY:0, maxY:0 },
   };
 }
 
@@ -112,6 +125,34 @@ export function updateMiasma(m, wind, dt) {
   }
 }
 
+export function getCoveragePercent(m) {
+  const b = m.bubble;
+  const t = m.tile;
+  const originX = -m.halfCols * t;
+  const originY = -m.halfRows * t;
+  const startX = Math.max(0, Math.floor((b.minX - originX) / t));
+  const endX = Math.min(m.cols - 1, Math.floor((b.maxX - originX) / t));
+  const startY = Math.max(0, Math.floor((b.minY - originY) / t));
+  const endY = Math.min(m.rows - 1, Math.floor((b.maxY - originY) / t));
+  let fog = 0, total = 0;
+  for (let y = startY; y <= endY; y++) {
+    const row = y * m.cols;
+    for (let x = startX; x <= endX; x++) {
+      total++;
+      if (m.strength[row + x] === 1) fog++;
+    }
+  }
+  return total ? fog / total : 0;
+}
+
+export function updateTargetCoverage(m, dt, densityCfg) {
+  m.densityT += dt;
+  const n = smoothNoise(m.densityT, m.densitySeed, densityCfg.noiseScale);
+  const desired = densityCfg.min + ((n + 1) * 0.5) * (densityCfg.max - densityCfg.min);
+  const k = 1 - Math.exp(-densityCfg.response * dt);
+  m.targetCoverage += (desired - m.targetCoverage) * k;
+}
+
 /**
  * OLD-STYLE regrowth tick (adjacency biased, double buffer).
  * Call this after updateMiasma in the main loop.
@@ -130,7 +171,10 @@ export function regrowMiasma(m, cfg, time, dt) {
   m.regrowTimer += dt;
   while (m.regrowTimer >= step) {
     m.regrowTimer -= step;
-    regrowStep(m, time, cfg.regrowDelay ?? 1.0, cfg.baseChance ?? 0.20);
+    const diff = m.targetCoverage - m.coverage;
+    const chance = Math.max(0, Math.min(1, (cfg.baseChance ?? 0.20) * (1 + diff)));
+    regrowStep(m, time, cfg.regrowDelay ?? 1.0, chance);
+    m.coverage = getCoveragePercent(m);
   }
 }
 
@@ -343,6 +387,8 @@ function regrowStep(s, now, regrowDelay, baseChance) {
 
 function shift(m, dx, dy) {
   const { cols, rows, strength, strengthNext, lastClear, spawnProb } = m;
+  const diff = m.targetCoverage - m.coverage;
+  const spawnChance = Math.max(0, Math.min(1, spawnProb * (1 + diff)));
 
   // When shifting, we must move both strength and lastClear.
   // We don't need strengthNext during shifting, but keep it in sync by ignoring it here;
@@ -362,7 +408,7 @@ function shift(m, dx, dy) {
           }
           // new leftmost column
           const idx = y * cols;
-          strength[idx]  = Math.random() < spawnProb ? 1 : 0;
+          strength[idx]  = Math.random() < spawnChance ? 1 : 0;
           lastClear[idx] = 0;
         } else {
           // shift left: copy from right neighbor
@@ -374,7 +420,7 @@ function shift(m, dx, dy) {
           }
           // new rightmost column
           const idx = y * cols + (cols - 1);
-          strength[idx]  = Math.random() < spawnProb ? 1 : 0;
+          strength[idx]  = Math.random() < spawnChance ? 1 : 0;
           lastClear[idx] = 0;
         }
       }
@@ -398,7 +444,7 @@ function shift(m, dx, dy) {
         // new top row
         for (let x = 0; x < cols; x++) {
           const idx = x;
-          strength[idx]  = Math.random() < spawnProb ? 1 : 0;
+          strength[idx]  = Math.random() < spawnChance ? 1 : 0;
           lastClear[idx] = 0;
         }
       } else {
@@ -415,7 +461,7 @@ function shift(m, dx, dy) {
         const base = (rows - 1) * cols;
         for (let x = 0; x < cols; x++) {
           const idx = base + x;
-          strength[idx]  = Math.random() < spawnProb ? 1 : 0;
+          strength[idx]  = Math.random() < spawnChance ? 1 : 0;
           lastClear[idx] = 0;
         }
       }

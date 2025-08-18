@@ -34,22 +34,26 @@
 /**
  * @typedef {Object} MiasmaState
  * @property {number} tile
- * @property {number} halfCols
- * @property {number} halfRows
  * @property {number} cols
  * @property {number} rows
+ * @property {number} halfCols
+ * @property {number} halfRows
  * @property {number} stride
  * @property {number} size
  * @property {Uint8Array} strength
  * @property {Uint8Array} strengthNext
- * @property {number} regrowDelay
- * @property {number} baseChance
- * @property {number} tickHz
- * @property {Float32Array} lastCleared
- * @property {number} _accum
- * @property {number} laserMinThicknessTiles
- * @property {number} laserFanCount
- * @property {number} laserFanMinDeg
+ * @property {Float32Array} lastClear
+ * @property {number} spawnProb
+ * @property {number} bufferCols
+ * @property {number} bufferRows
+ * @property {number} offsetX
+ * @property {number} offsetY
+ * @property {number} regrowTimer
+ * @property {number} coverage
+ * @property {number} targetCoverage
+ * @property {number} densityT
+ * @property {number} densitySeed
+ * @property {{minX:number,maxX:number,minY:number,maxY:number}} bubble
  */
 
 /**
@@ -124,7 +128,11 @@
  * @property {number} speed
  * @property {"manual"|"auto"} mode
  * @property {number} driftTimer
- * @property {number} nextShiftAt
+ * @property {number} targetDir
+ * @property {number} targetSpeed
+ * @property {number} t
+ * @property {number} dirSeed
+ * @property {number} spdSeed
  */
 
 
