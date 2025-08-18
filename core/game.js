@@ -281,9 +281,68 @@ function draw() {
     }
   }
 
-  world.draw(ctx, state.miasma, state.obstacleGrid, camDraw);
-  enemies.drawEnemies(ctx, state);
-  pickups.drawPickups(ctx, state.pickups, camDraw);
+  // --- Gather drawables for sorted rendering ---
+  const drawables = [];
+  world.draw(drawables, state.miasma, state.obstacleGrid, camDraw);
+  enemies.drawEnemies(drawables, state);
+  pickups.drawPickups(drawables, state.pickups, camDraw);
+
+  // Player sprite info
+  const playerPos = isoProject(state.camera.x, state.camera.y, camDraw);
+  drawables.push({
+    x: playerPos.x,
+    y: playerPos.y,
+    isoY: playerPos.y,
+    type: "player",
+    r: state.player.r,
+    color: "#9a3b31",
+  });
+
+  // Depth sort by isoY and render
+  drawables.sort((a, b) => a.isoY - b.isoY);
+  for (const d of drawables) {
+    switch (d.type) {
+      case "tile":
+        ctx.fillStyle = d.color;
+        ctx.fillRect(d.x, d.y, d.size, d.size);
+        break;
+      case "enemy":
+        ctx.beginPath();
+        ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+        ctx.fillStyle = d.color;
+        ctx.fill();
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        break;
+      case "enemyProjectile":
+        ctx.save();
+        ctx.translate(d.x, d.y);
+        ctx.rotate(d.angle);
+        ctx.fillStyle = "rgba(255,0,0,0.9)";
+        ctx.fillRect(-d.w / 2, -d.h / 2, d.w, d.h);
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(-d.w / 2, -d.h / 2, d.w, d.h);
+        ctx.restore();
+        break;
+      case "pickup":
+        ctx.beginPath();
+        ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+        ctx.fillStyle = d.color;
+        ctx.fill();
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        break;
+      case "player":
+        ctx.fillStyle = d.color;
+        ctx.beginPath();
+        ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+    }
+  }
 
   if (state.miasmaEnabled) {
     miasma.draw(ctx, state.miasma, camDraw, w, h);
@@ -296,13 +355,6 @@ function draw() {
   } else if (state.activeWeapon === "drill") {
     drill.drawDrill(ctx, state.drill, state.mouse, state.activeWeapon, state.camera.cx, state.camera.cy, state.drillOverheated);
   }
-
-  // Player sprite rendered via projection helper.
-  const playerPos = isoProject(state.camera.x, state.camera.y, camDraw);
-  ctx.fillStyle = "#9a3b31";
-  ctx.beginPath();
-  ctx.arc(playerPos.x, playerPos.y, state.player.r, 0, Math.PI * 2);
-  ctx.fill();
 
   if (state.damageFlash > 0) {
     ctx.fillStyle = `rgba(255,0,0,${state.damageFlash * 0.5})`;

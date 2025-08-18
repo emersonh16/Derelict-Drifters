@@ -25,15 +25,16 @@ export function updatePickups(pickups, camera, player, state, dt) {
   }
 }
 
-export function drawPickups(ctx, pickups, camera) {
+export function drawPickups(drawables, pickups, camera) {
   for (const p of pickups) {
     const proj = isoProject(p.x, p.y, camera);
-    ctx.beginPath();
-    ctx.arc(proj.x, proj.y, p.r, 0, Math.PI * 2);
-    ctx.fillStyle = (p.type === "scrap") ? "#ff0" : "#0f0";
-    ctx.fill();
-    ctx.strokeStyle = "#fff";
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    drawables.push({
+      x: proj.x,
+      y: proj.y,
+      isoY: proj.y,
+      type: "pickup",
+      r: p.r,
+      color: p.type === "scrap" ? "#ff0" : "#0f0",
+    });
   }
 }
