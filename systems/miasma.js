@@ -19,11 +19,6 @@
  * @property {number} offsetY
  */
 
-/**
- * Initialize miasma grid.
- * @param {import("../core/config.js").config["dynamicMiasma"]} cfg
- * @returns {MiasmaState}
- */
 export function initMiasma(cfg) {
   const cols = cfg.cols + cfg.bufferCols * 2;
   const rows = cfg.rows + cfg.bufferRows * 2;
@@ -34,92 +29,72 @@ export function initMiasma(cfg) {
     tiles[i] = Math.random() < cfg.spawnProb ? 1 : 0;
   }
 
-
-  // --- force clear a safe zone at center ---
-  const safeR = 10; // radius in tiles
+  // clear safe zone in center
+  const safeR = 10;
   const cx = Math.floor(cols / 2);
   const cy = Math.floor(rows / 2);
   for (let dy = -safeR; dy <= safeR; dy++) {
     for (let dx = -safeR; dx <= safeR; dx++) {
-      const x = cx + dx;
-      const y = cy + dy;
+      const x = cx + dx, y = cy + dy;
       if (x < 0 || x >= cols || y < 0 || y >= rows) continue;
-      const idx = y * cols + x;
-      tiles[idx] = 0; // clear
+      tiles[y * cols + x] = 0;
     }
   }
 
-if (cfg.debugSpawn) {
-  let fogCount = 0;
-  for (let i = 0; i < tiles.length; i++) {
-    tiles[i] = Math.random() < 0.7 ? 1 : 0;
-    if (tiles[i] === 1) fogCount++;
+  if (cfg.debugSpawn) {
+    let fogCount = 0;
+    for (let i = 0; i < tiles.length; i++) {
+      tiles[i] = Math.random() < 0.7 ? 1 : 0;
+      if (tiles[i] === 1) fogCount++;
+    }
+    console.log("[miasma] debug spawn → fog tiles:", fogCount, "of", tiles.length);
   }
-  console.log("[miasma] debug spawn → fog tiles:", fogCount, "of", tiles.length);
+
+  return {
+    tile: cfg.tile,
+    cols,
+    rows,
+    halfCols: Math.floor(cols / 2),
+    halfRows: Math.floor(rows / 2),
+    stride: cols,
+    size,
+    tiles,
+    spawnProb: cfg.spawnProb,
+    bufferCols: cfg.bufferCols,
+    bufferRows: cfg.bufferRows,
+    offsetX: 0,
+    offsetY: 0,
+  };
 }
-
-
-
-    return {
-      tile: cfg.tile,
-      cols,
-      rows,
-      halfCols: Math.floor(cols / 2),
-      halfRows: Math.floor(rows / 2),
-      stride: cols,
-      size,
-      tiles,
-      spawnProb: cfg.spawnProb,
-      bufferCols: cfg.bufferCols,
-      bufferRows: cfg.bufferRows,
-      offsetX: 0,
-      offsetY: 0,
-    };
-}
-
-
 
 /**
- * Update conveyor drift.
- * @param {MiasmaState} m
- * @param {import("./wind.js").WindState} wind
- * @param {number} dt
+ * Update conveyor drift (whole tiles only; no sub-tile drift).
  */
 export function updateMiasma(m, wind, dt) {
-  // accumulate displacement
   const move = wind.speed * dt;
   m.offsetX += Math.cos(wind.direction) * move;
   m.offsetY += Math.sin(wind.direction) * move;
 
-  // shift whole tiles
-   while (m.offsetX >= m.tile) { shift(m, +1, 0); }
-  while (m.offsetX <= -m.tile) { shift(m, -1, 0); }
-  while (m.offsetY >= m.tile) { shift(m, 0, +1); }
-  while (m.offsetY <= -m.tile) { shift(m, 0, -1); }
+  while (m.offsetX >= m.tile) { shift(m, +1, 0); m.offsetX -= m.tile; }
+  while (m.offsetX <= -m.tile) { shift(m, -1, 0); m.offsetX += m.tile; }
+  while (m.offsetY >= m.tile) { shift(m, 0, +1); m.offsetY -= m.tile; }
+  while (m.offsetY <= -m.tile) { shift(m, 0, -1); m.offsetY += m.tile; }
 
-  // keep offsets wrapped within [0, tile) to avoid jitter
-  m.offsetX = ((m.offsetX % m.tile) + m.tile) % m.tile;
-  m.offsetY = ((m.offsetY % m.tile) + m.tile) % m.tile;
-
+  // lock to world grid — no subpixel offsets
+  m.offsetX = 0;
+  m.offsetY = 0;
 }
 
-
-/**
- * Shift the grid and respawn on upwind edge.
- */
 function shift(m, dx, dy) {
   const { cols, rows, tiles, spawnProb } = m;
   if (dx) {
-    // column shift
     for (let y = 0; y < rows; y++) {
       if (dx > 0) {
-        // shift right → fill left col
         for (let x = cols - 1; x > 0; x--) {
           tiles[y * cols + x] = tiles[y * cols + x - 1];
         }
         tiles[y * cols] = Math.random() < spawnProb ? 1 : 0;
       } else {
-        // shift left → fill right col
         for (let x = 0; x < cols - 1; x++) {
           tiles[y * cols + x] = tiles[y * cols + x + 1];
         }
@@ -128,88 +103,60 @@ function shift(m, dx, dy) {
     }
   }
   if (dy) {
-    // row shift
     if (dy > 0) {
-      // shift down → fill top row
       for (let y = rows - 1; y > 0; y--) {
         for (let x = 0; x < cols; x++) {
           tiles[y * cols + x] = tiles[(y - 1) * cols + x];
         }
       }
-      for (let x = 0; x < cols; x++) {
-        tiles[x] = Math.random() < spawnProb ? 1 : 0;
-      }
+      for (let x = 0; x < cols; x++) tiles[x] = Math.random() < spawnProb ? 1 : 0;
     } else {
-      // shift up → fill bottom row
       for (let y = 0; y < rows - 1; y++) {
         for (let x = 0; x < cols; x++) {
           tiles[y * cols + x] = tiles[(y + 1) * cols + x];
         }
       }
-      for (let x = 0; x < cols; x++) {
-        tiles[(rows - 1) * cols + x] = Math.random() < spawnProb ? 1 : 0;
-      }
+      for (let x = 0; x < cols; x++) tiles[(rows - 1) * cols + x] = Math.random() < spawnProb ? 1 : 0;
     }
   }
-  m.offsetX = ((m.offsetX + dx * m.tile) % m.tile + m.tile) % m.tile;
-  m.offsetY = ((m.offsetY + dy * m.tile) % m.tile + m.tile) % m.tile;
-
 }
 
 /**
- * Draw miasma.
+ * Draw miasma aligned to world pixel grid.
  */
 export function drawMiasma(ctx, m, cam, cx, cy, w, h) {
-  // Bright + solid while testing; switch back to translucent later if you want
   ctx.fillStyle = "rgba(180,120,255,1.0)";
-
   const t = m.tile;
   const cxTiles = Math.floor(m.cols / 2);
   const cyTiles = Math.floor(m.rows / 2);
 
-// Smooth sub-tile drift (no jitter)
-const subX = ((m.offsetX % t) + t) % t;
-const subY = ((m.offsetY % t) + t) % t;
-const ox = subX;
-const oy = subY;
-
-// World origin of grid
-const originX = -cxTiles * t + ox;
-const originY = -cyTiles * t + oy;
-
-
+  const originX = -cxTiles * t;
+  const originY = -cyTiles * t;
 
   for (let y = 0; y < m.rows; y++) {
-    const wy = ((originY + y * t - cam.y + cy) | 0);  // integer pixel
+    const wy = ((originY + y * t - cam.y + cy) | 0);
     for (let x = 0; x < m.cols; x++) {
       if (m.tiles[y * m.cols + x] !== 1) continue;
-      const wx = ((originX + x * t - cam.x + cx) | 0); // integer pixel
+      const wx = ((originX + x * t - cam.x + cx) | 0);
       ctx.fillRect(wx, wy, t, t);
     }
   }
-
-
 }
 
-
-
-
-
-export function worldToIdx(m, wx, wy, camera) {
+/**
+ * Convert a world position to a miasma tile index.
+ * Note: camera is unused (kept for API compatibility).
+ */
+export function worldToIdx(m, wx, wy, /* camera */) {
   const t = m.tile;
   const cols = m.cols, rows = m.rows;
   const cxTiles = Math.floor(cols / 2);
   const cyTiles = Math.floor(rows / 2);
 
-  // Same quantized origin as draw
-  const subX = ((m.offsetX % t) + t) % t;
-  const subY = ((m.offsetY % t) + t) % t;
-  const ox = Math.round(subX);
-  const oy = Math.round(subY);
-  const originX = -cxTiles * t + ox;
-  const originY = -cyTiles * t + oy;
+  // Same locked origin as drawMiasma
+  const originX = -cxTiles * t;
+  const originY = -cyTiles * t;
 
-  // Convert world position to tile coords
   const x = Math.floor((wx - originX) / t);
   const y = Math.floor((wy - originY) / t);
 
@@ -217,36 +164,36 @@ export function worldToIdx(m, wx, wy, camera) {
   return y * cols + x;
 }
 
-
-
-
+/**
+ * Return true iff the index is in-bounds and fogged.
+ */
 export function isFog(m, idx) {
   if (idx < 0 || idx >= m.size) return false;
   return m.tiles[idx] === 1;
 }
 
-
-// Clear tiles intersecting the beam shape.
-// Origin is the player's world position (camera center).
+/**
+ * Clear tiles intersecting the beam shape in world space.
+ * Signature kept identical to existing calls in game.js.
+ */
 export function clearWithBeam(m, beamState, camera, time, cx, cy) {
-  const mode     = beamState.mode;                    // "bubble" | "cone" | "laser"
-  const angleW   = beamState.angle;                   // world angle (radians)
+  const mode     = beamState.mode;     // "bubble" | "cone" | "laser"
+  const angleW   = beamState.angle;    // world angle (radians)
   const halfArc  = beamState.halfArc;
   const maxRange = mode === "bubble" ? (beamState.radius || 0) : (beamState.range || 0);
   if (!maxRange || maxRange <= 0) return;
 
-  // Grid + origin (same as draw)
   const t = m.tile, cols = m.cols, rows = m.rows;
   const cxTiles = Math.floor(cols / 2), cyTiles = Math.floor(rows / 2);
-  const subX = ((m.offsetX % t) + t) % t, subY = ((m.offsetY % t) + t) % t;
-  const ox = Math.round(subX), oy = Math.round(subY);
-  const originX = -cxTiles * t + ox;
-  const originY = -cyTiles * t + oy;
 
-  // Player in world
+  // Same locked origin as drawMiasma
+  const originX = -cxTiles * t;
+  const originY = -cyTiles * t;
+
+  // Player's world position
   const px = camera.x, py = camera.y;
 
-  // Player tile
+  // Center tile around player and clamp a search window
   const ix0 = Math.floor((px - originX) / t);
   const iy0 = Math.floor((py - originY) / t);
   const rTiles = Math.ceil(maxRange / t) + 1;
@@ -256,7 +203,7 @@ export function clearWithBeam(m, beamState, camera, time, cx, cy) {
   const minX = Math.max(0, ix0 - rTiles);
   const maxX = Math.min(cols - 1, ix0 + rTiles);
 
-  const angDiff = (a, b) => {
+  const angDiffAbs = (a, b) => {
     let d = a - b;
     while (d >  Math.PI) d -= Math.PI * 2;
     while (d < -Math.PI) d += Math.PI * 2;
@@ -271,11 +218,9 @@ export function clearWithBeam(m, beamState, camera, time, cx, cy) {
 
       const wx = originX + ix * t + t * 0.5;
 
-     // Vector from player to tile center in world space
+      // Vector from player to tile center
       const dxW = wx - px, dyW = wy - py;
- 
-
-        const dist = Math.hypot(dxW, dyW);
+      const dist = Math.hypot(dxW, dyW);
       if (dist > maxRange) continue;
 
       if (mode === "bubble") {
@@ -283,10 +228,11 @@ export function clearWithBeam(m, beamState, camera, time, cx, cy) {
         continue;
       }
 
-         const aTile = Math.atan2(dyW, dxW);
-      if (angDiff(aTile, angleW) <= halfArc) {
+      const aTile = Math.atan2(dyW, dxW);
+      if (angDiffAbs(aTile, angleW) <= halfArc) {
         m.tiles[idx] = 0;
       }
     }
   }
 }
+
