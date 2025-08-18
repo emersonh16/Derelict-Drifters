@@ -52,7 +52,11 @@ When refactoring old systems, **do one system at a time** to keep `main` stable.
 ## Config & constants
 - Tunable numbers should live in `core/config.js`  
 - **Current reality:** magic numbers are still present in many modules  
-- **Rule:** when you touch a module, move its tunables into config  
+- **Rule:** when you touch a module, move its tunables into config
+- Key options:
+  - `world.spawnSafeRadius` — tiles kept clear around player spawn
+  - `world.seedCount` / `world.growthSteps` / `world.branchChance` — obstacle generation tuning
+  - `dynamicMiasma.initialSafeRadius` — starting fog-free radius
 
 ---
 

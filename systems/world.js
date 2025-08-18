@@ -12,25 +12,34 @@ export function initWorld(miasma, player, opts = {}, rng) {
     maxX:  miasma.halfCols * t,
     minY: -miasma.halfRows * t,
     maxY:  miasma.halfRows * t,
-    borderThickness: opts.borderThickness ?? 80,
-    borderColor: opts.borderColor ?? 'rgba(120, 60, 160, 0.7)'
+    borderThickness: opts.borderThickness,
+    borderColor: opts.borderColor
   };
 
   const obstacleGrid = new Uint8Array(miasma.size).fill(0);
 
   // Generate irregular rock formations
-  generateObstacles(miasma, obstacleGrid, opts.seedCount ?? 30, opts.growthSteps ?? 700, opts.spawnSafeTiles, rng);
+  generateObstacles(
+    miasma,
+    obstacleGrid,
+    opts.seedCount,
+    opts.growthSteps,
+    opts.spawnSafeRadius,
+    opts.branchChance,
+    rng
+  );
 
   // Ensure the spawn area is absolutely clear (in tiles)
-  const playerR = player?.r ?? 18;
-  const tilesRadius = opts?.spawnSafeTiles ?? Math.max(6, Math.ceil(playerR / t) + 3);
-  clearSpawnArea(miasma, obstacleGrid, tilesRadius);
+  const tilesRadius = opts.spawnSafeRadius;
+  if (typeof tilesRadius === 'number') {
+    clearSpawnArea(miasma, obstacleGrid, tilesRadius);
+  }
 
   return { world, obstacleGrid };
 }
 
 // Random-walk growth algorithm for wonky rock shapes
-function generateObstacles(miasma, grid, seedCount = 20, growthSteps = 150, spawnSafeOverride, rng) {
+function generateObstacles(miasma, grid, seedCount, growthSteps, spawnSafeRadius, branchChance, rng) {
   const cols = miasma.cols;
   const rows = miasma.rows;
 
@@ -38,21 +47,20 @@ function generateObstacles(miasma, grid, seedCount = 20, growthSteps = 150, spaw
   const centerRow = Math.floor(rows / 2);
 
   // spawn-safe radius in tiles
-  const spawnSafeRadius =
-    typeof spawnSafeOverride === 'number' ? spawnSafeOverride : 8;
+  const safeRadius = typeof spawnSafeRadius === 'number' ? spawnSafeRadius : 0;
 
   for (let i = 0; i < seedCount; i++) {
     let col = Math.floor(rng.next() * cols);
     let row = Math.floor(rng.next() * rows);
 
     // Skip if starting inside spawn-safe zone
-    if (Math.hypot(col - centerCol, row - centerRow) <= spawnSafeRadius) continue;
+      if (Math.hypot(col - centerCol, row - centerRow) <= safeRadius) continue;
 
     for (let step = 0; step < growthSteps; step++) {
       // Mark tile as rock (skip if in spawn-safe zone)
       const idx = row * cols + col;
       const dc = col - centerCol, dr = row - centerRow;
-      if (dc * dc + dr * dr > spawnSafeRadius * spawnSafeRadius) {
+      if (dc * dc + dr * dr > safeRadius * safeRadius) {
         grid[idx] = 1;
       }
 
@@ -70,8 +78,8 @@ function generateObstacles(miasma, grid, seedCount = 20, growthSteps = 150, spaw
       if (row >= rows) row = rows - 1;
 
       // Occasionally branch off into a smaller growth
-      if (rng.next() < 0.05) {
-        generateBranch(grid, col, row, cols, rows, Math.floor(growthSteps / 2), centerCol, centerRow, spawnSafeRadius, rng);
+      if (rng.next() < branchChance) {
+        generateBranch(grid, col, row, cols, rows, Math.floor(growthSteps / 2), centerCol, centerRow, safeRadius, rng);
       }
     }
   }
@@ -103,7 +111,7 @@ function generateBranch(grid, col, row, cols, rows, steps, centerCol, centerRow,
 
 export function clampToWorld(world, camera, player) {
   if (!world) return;
-  const r = player?.r ?? 18;
+  const r = player?.r ?? 0;
   camera.x = clamp(camera.x, world.minX + r, world.maxX - r);
   camera.y = clamp(camera.y, world.minY + r, world.maxY - r);
 }

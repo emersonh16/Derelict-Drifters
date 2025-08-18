@@ -70,7 +70,11 @@ export const config = {
 
   world: {
     borderThickness: 80,                       // visual wall thickness
-    borderColor: 'rgba(120, 60, 160, 0.7)'      // matches miasma but more opaque
+    borderColor: 'rgba(120, 60, 160, 0.7)',     // matches miasma but more opaque
+    seedCount: 30,         // rock seed count
+    growthSteps: 700,      // rock growth steps
+    spawnSafeRadius: 8,    // tiles kept clear near spawn
+    branchChance: 0.05     // chance for rock growth branching
   },
 
   hud: {
@@ -128,6 +132,7 @@ dynamicMiasma: {
   spawnProb: 1,
   dps: 5,
   debugSpawn: false,
+  initialSafeRadius: 10, // tiles kept clear at start
 
   // NEW regrow settings
   regrowEnabled: true,    // master toggle
