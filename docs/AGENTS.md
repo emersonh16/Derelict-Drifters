@@ -77,14 +77,15 @@ When refactoring old systems, **do one system at a time** to keep `main` stable.
 
 ---
 
-## Testing (smoke)
-Before committing, always confirm:  
-1. Open `index.html` in a modern browser  
-2. Move the player (WASD)  
-3. Fire beam (wheel cycles modes)  
-4. Clear miasma  
-5. Spawn and kill enemy → pickup drops  
-6. Verify game runs smoothly (~60 FPS)  
+## Testing
+Before committing, always run `npm test` and confirm:
+
+1. Open `index.html` in a modern browser
+2. Move the player (WASD)
+3. Fire beam (wheel cycles modes)
+4. Clear miasma
+5. Spawn and kill enemy → pickup drops
+6. Verify game runs smoothly (~60 FPS)
 
 ---
 
