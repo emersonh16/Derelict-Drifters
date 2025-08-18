@@ -208,30 +208,43 @@ export function updateEnemies(state, dt) {
 }
 
 /** @param {GameState} state */
-export function drawEnemies(ctx, state) {
+export function drawEnemies(drawables, state) {
   const cfg = state.enemies;
   const cam = state.camera;
 
   for (const m of cfg.list) {
     const proj = isoProject(m.x, m.y, cam);
-    ctx.beginPath();
-    ctx.arc(proj.x, proj.y, m.r, 0, Math.PI * 2);
-
+    let color;
     if (m.type === "fast") {
-      ctx.fillStyle = m.flash > 0 ? `rgba(255,255,255,${m.flash / cfg.flashTime})` : 'rgba(50,50,200,0.9)';
+      color = m.flash > 0 ? `rgba(255,255,255,${m.flash / cfg.flashTime})` : "rgba(50,50,200,0.9)";
     } else if (m.type === "tank") {
-      ctx.fillStyle = m.flash > 0 ? `rgba(255,255,255,${m.flash / cfg.flashTime})` : 'rgba(255,165,0,0.9)';
+      color = m.flash > 0 ? `rgba(255,255,255,${m.flash / cfg.flashTime})` : "rgba(255,165,0,0.9)";
     } else {
-      ctx.fillStyle = m.flash > 0 ? `rgba(255,255,255,${m.flash / cfg.flashTime})` : 'rgba(200,50,50,0.9)';
+      color = m.flash > 0 ? `rgba(255,255,255,${m.flash / cfg.flashTime})` : "rgba(200,50,50,0.9)";
     }
 
-    ctx.fill();
-    ctx.strokeStyle = 'white';
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    drawables.push({
+      x: proj.x,
+      y: proj.y,
+      isoY: proj.y,
+      type: "enemy",
+      r: m.r,
+      color,
+    });
   }
 
-  drawEnemyProjectiles(ctx, state);
+  for (const p of state.enemyProjectiles) {
+    const proj = isoProject(p.x, p.y, cam);
+    drawables.push({
+      x: proj.x,
+      y: proj.y,
+      isoY: proj.y,
+      type: "enemyProjectile",
+      w: p.w,
+      h: p.h,
+      angle: Math.atan2(p.dy, p.dx),
+    });
+  }
 }
 
 function spawnTankBullet(state, x, y, dx, dy) {
@@ -279,25 +292,7 @@ function updateEnemyProjectiles(state, dt) {
   }
 }
 
-function drawEnemyProjectiles(ctx, state) {
-  const cam = state.camera;
-
-  for (const p of state.enemyProjectiles) {
-    const proj = isoProject(p.x, p.y, cam);
-    ctx.save();
-    ctx.translate(proj.x, proj.y);
-    ctx.rotate(Math.atan2(p.dy, p.dx));
-
-    ctx.fillStyle = 'rgba(255,0,0,0.9)';
-    ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
-
-    ctx.strokeStyle = 'white';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(-p.w / 2, -p.h / 2, p.w, p.h);
-
-    ctx.restore();
-  }
-}
+// (projectiles drawing moved into drawEnemies)
 
 function applyLaserDamage(state, m, dt) {
   const b = state.beam;

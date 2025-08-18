@@ -149,26 +149,28 @@ export function drawWorldBorder(ctx, world, camera) {
   ctx.restore();
 }
 
-// Draw rock tiles
-export function draw(ctx, miasma, obstacleGrid, camera) {
+// Queue rock tiles for drawing
+export function draw(drawables, miasma, obstacleGrid, camera) {
   const t = miasma.tile;
   const cols = miasma.cols;
   const rows = miasma.rows;
-
-  ctx.save();
-  ctx.fillStyle = "#444";
 
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
       const idx = row * cols + col;
       if (obstacleGrid[idx] === 1) {
         const proj = isoProjectTile(col - miasma.halfCols, row - miasma.halfRows, t, camera);
-        ctx.fillRect(proj.x, proj.y, t, t);
+        drawables.push({
+          x: proj.x,
+          y: proj.y,
+          isoY: proj.y,
+          type: "tile",
+          size: t,
+          color: "#444",
+        });
       }
     }
   }
-
-  ctx.restore();
 }
 
 // Collision detection for grid-based rocks
