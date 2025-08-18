@@ -128,6 +128,8 @@ function startGame() {
   state.pickups.length = 0;
   state.camera.x = 0;
   state.camera.y = 0;
+  state.cameraVel.x = 0;
+  state.cameraVel.y = 0;
 
   // Mouse centered (like a fresh load)
   state.mouse.x = canvas.width / 2;
@@ -178,23 +180,33 @@ if (state.miasmaEnabled) {
 }
 
   // movement
-  let vx = 0, vy = 0;
-  if (state.keys.has('w')) vy -= 1;
-  if (state.keys.has('s')) vy += 1;
-  if (state.keys.has('a')) vx -= 1;
-  if (state.keys.has('d')) vx += 1;
+   let ax = 0, ay = 0;
+  if (state.keys.has('w')) ay -= 1;
+  if (state.keys.has('s')) ay += 1;
+  if (state.keys.has('a')) ax -= 1;
+  if (state.keys.has('d')) ax += 1;
 
-  if (vx || vy) {
-    const len = Math.hypot(vx, vy) || 1;
-    vx /= len; 
-    vy /= len;
-    const speed = 240;
-    state.camera.x += vx * speed * dt;
-    state.camera.y += vy * speed * dt;
-
-    // Prevent player from passing through obstacles
-    world.collideWithObstacles(state.miasma, state.obstacleGrid, state.camera, state.player.r);
+  if (ax || ay) {
+    const len = Math.hypot(ax, ay) || 1;
+    ax /= len;
+    ay /= len;
   }
+
+  const accel = 960;
+  const damping = 4;
+
+  state.cameraVel.x += ax * accel * dt;
+  state.cameraVel.y += ay * accel * dt;
+
+  state.cameraVel.x -= state.cameraVel.x * damping * dt;
+  state.cameraVel.y -= state.cameraVel.y * damping * dt;
+
+  state.camera.x += state.cameraVel.x * dt;
+  state.camera.y += state.cameraVel.y * dt;
+
+  // Prevent player from passing through obstacles
+  world.collideWithObstacles(state.miasma, state.obstacleGrid, state.camera, state.player.r);
+
 
   world.clampToWorld(state.world, state.camera, state.player);
 

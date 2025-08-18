@@ -135,6 +135,7 @@
  * @property {Vec2} mouse
  * @property {Vec2} pendingMouse
  * @property {Vec2} camera
+ * @property {Vec2} cameraVel
  * @property {{r:number}} player
  * @property {Set<string>} keys
  * @property {number} health
@@ -176,6 +177,7 @@ export function createGameState() {
     mouse: { x: 0, y: 0 },
     pendingMouse: { x: 0, y: 0 },
     camera: { x: 0, y: 0 },
+    cameraVel: { x: 0, y: 0 },
     player: { r: 18 },
     keys: new Set(),
     health: 100,
