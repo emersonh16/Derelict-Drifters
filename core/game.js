@@ -64,6 +64,7 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "1") state.activeWeapon = "beam";
   if (e.key === "2") state.activeWeapon = "drill";
   if (e.key.toLowerCase() === "m") state.miasmaEnabled = !state.miasmaEnabled; // testing toggle
+    if (e.key.toLowerCase() === "n") state.useCrystalRegrow = !state.useCrystalRegrow;
 });
 
 function togglePause() {
@@ -98,6 +99,7 @@ window.addEventListener("keydown", (e) => {
 function startGame() {
   // --- Base run/reset ---
   state.miasmaEnabled = true;
+  state.useCrystalRegrow = false;
   state.time = 0;
   state.dt = 0;
   state.keys.clear();
@@ -171,12 +173,21 @@ function update(dt) {
 
 if (state.miasmaEnabled) {
   miasma.updateMiasma(state.miasma, state.wind, dt);
-  miasma.regrowMiasma(
-    state.miasma,
-    config.dynamicMiasma,
-    state.time,
-    dt
-  );
+   if (state.useCrystalRegrow) {
+    miasma.regrowMiasmaCrystal(
+      state.miasma,
+      config.dynamicMiasma,
+      state.time,
+      dt
+    );
+  } else {
+    miasma.regrowMiasma(
+      state.miasma,
+      config.dynamicMiasma,
+      state.time,
+      dt
+    );
+  }
 }
 
   // movement

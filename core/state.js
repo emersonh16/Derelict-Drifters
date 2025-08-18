@@ -172,6 +172,7 @@
  * @property {{show?:boolean,perf?:any}} [dev]
  * @property {Array<EnemyProjectile>} enemyProjectiles
  * @property {WindState} [wind]
+ * @property {boolean} useCrystalRegrow
 
  */
 
@@ -206,6 +207,7 @@ export function createGameState() {
     drillCoolTimer: 0,
     drillDidHit: false,
     enemyProjectiles: [],
+    useCrystalRegrow: false,
   };
 }
 

@@ -13,6 +13,7 @@ import { smoothNoise } from "./smooth-noise.js";
  *  - updateMiasma(m, wind, dt)
  *  - regrowMiasma(m, cfg, time, dt)
  *  - drawMiasma(ctx, m, cam, cx, cy, w, h)
+ *  - regrowMiasmaCrystal(m, cfg, time, dt)
  *  - worldToIdx(m, wx, wy)
  *  - isFog(m, idx)
  *  - clearWithBeam(m, beamState, camera, time, cx, cy)
@@ -177,6 +178,34 @@ export function regrowMiasma(m, cfg, time, dt) {
     m.coverage = getCoveragePercent(m);
   }
 }
+
+/**
+ * Crystal-style regrowth tick. Instead of combining probabilities from all
+ * adjacent fog tiles, each existing fog tile attempts to grow into a single
+ * random neighbour. This tends to produce long "crystal" fingers. Call this
+ * after updateMiasma in the main loop when crystal regrowth is enabled.
+ *
+ * cfg fields (from config.dynamicMiasma):
+ *  - regrowEnabled: boolean
+ *  - regrowDelay:   seconds
+ *  - baseChance:    probability per tick for a fog tile to expand
+ *  - tickHz:        ticks per second
+ */
+export function regrowMiasmaCrystal(m, cfg, time, dt) {
+  if (!cfg || !cfg.regrowEnabled) return;
+
+  const tickHz = cfg.tickHz || 8;
+  const step = 1 / tickHz;
+  m.regrowTimer += dt;
+  while (m.regrowTimer >= step) {
+    m.regrowTimer -= step;
+    const diff = m.targetCoverage - m.coverage;
+    const chance = Math.max(0, Math.min(1, (cfg.baseChance ?? 0.20) * (1 + diff)));
+    crystalRegrowStep(m, time, cfg.regrowDelay ?? 1.0, chance);
+    m.coverage = getCoveragePercent(m);
+  }
+}
+
 
 /**
  * Draw fog tiles aligned to world pixel grid (centered grid).
@@ -348,6 +377,40 @@ export function clearWithBeam(m, beamState, camera, time, cx, cy) {
 
 
 /* ---------------- Internals ---------------- */
+
+function crystalRegrowStep(s, now, regrowDelay, baseChance) {
+  const prev = s.strength;
+  const next = s.strengthNext;
+  next.set(prev);
+
+  const cols = s.cols, rows = s.rows;
+
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const i = y * cols + x;
+      if (prev[i] !== 1) continue;
+
+      if (Math.random() >= baseChance) continue;
+
+      let nx = x, ny = y;
+      const dir = Math.floor(Math.random() * 4);
+      if (dir === 0) nx++;
+      else if (dir === 1) nx--;
+      else if (dir === 2) ny++;
+      else ny--;
+
+      if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
+      const ni = ny * cols + nx;
+      if (prev[ni] === 1) continue;
+      if ((now - s.lastClear[ni]) < regrowDelay) continue;
+      next[ni] = 1;
+    }
+  }
+
+  s.strength = next;
+  s.strengthNext = prev;
+}
+
 
 function regrowStep(s, now, regrowDelay, baseChance) {
   const prev = s.strength;
