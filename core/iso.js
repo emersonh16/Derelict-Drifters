@@ -2,7 +2,7 @@
 
 /**
  * Project world coordinates into screen space using a simple
- * isometric transform relative to the provided camera.
+ * 45° isometric-like transform relative to the provided camera.
  *
  * @param {number} x world x coordinate
  * @param {number} y world y coordinate
@@ -13,7 +13,7 @@ export function isoProject(x, y, cam) {
   const dx = x - cam.x;
   const dy = y - cam.y;
   const isoX = dx - dy;
-  const isoY = (dx + dy) * 0.5;
+  const isoY = dx + dy;
   return {
     x: isoX + (cam.isoX || 0) + cam.cx,
     y: isoY + (cam.isoY || 0) + cam.cy,
@@ -46,8 +46,8 @@ export function isoProjectTile(col, row, tileSize, cam) {
 export function worldFromIso(screenX, screenY, cam) {
   const isoX = screenX - (cam.isoX || 0) - cam.cx;
   const isoY = screenY - (cam.isoY || 0) - cam.cy;
-  const dx = isoX * 0.5 + isoY;
-  const dy = isoY - isoX * 0.5;
+  const dx = (isoX + isoY) * 0.5;
+  const dy = (isoY - isoX) * 0.5;
   return {
     x: cam.x + dx,
     y: cam.y + dy,
