@@ -145,6 +145,7 @@
  * @property {Vec2} camera
  * @property {Vec2} cameraVel
  * @property {{r:number}} player
+ * @property {Vec2} playerVel
  * @property {Set<string>} keys
  * @property {number} health
  * @property {number} maxHealth
@@ -188,6 +189,7 @@ export function createGameState() {
     camera: { x: 0, y: 0 },
     cameraVel: { x: 0, y: 0 },
     player: { r: 18 },
+    playerVel: { x: 0, y: 0 },
     keys: new Set(),
     health: 100,
     maxHealth: 100,

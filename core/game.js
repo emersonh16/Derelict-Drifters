@@ -123,6 +123,8 @@ function startGame() {
   // Player starts at origin
   state.player.x = 0;
   state.player.y = 0;
+  state.playerVel.x = 0;
+  state.playerVel.y = 0;
 
   // Camera starts centered on player
   state.camera.x = state.player.x;
@@ -198,30 +200,43 @@ if (state.miasmaEnabled) {
 }
 
   // movement
-// --- Non-floaty WASD using existing state.keys; move the CAMERA ---
-{
-  const ax = (state.keys.has('d') || state.keys.has('arrowright') ? 1 : 0)
-           - (state.keys.has('a') || state.keys.has('arrowleft')  ? 1 : 0);
-  const ay = (state.keys.has('s') || state.keys.has('arrowdown')  ? 1 : 0)
-           - (state.keys.has('w') || state.keys.has('arrowup')    ? 1 : 0);
+  {
+    const ax =
+      (state.keys.has("d") || state.keys.has("arrowright") ? 1 : 0) -
+      (state.keys.has("a") || state.keys.has("arrowleft") ? 1 : 0);
+    const ay =
+      (state.keys.has("s") || state.keys.has("arrowdown") ? 1 : 0) -
+      (state.keys.has("w") || state.keys.has("arrowup") ? 1 : 0);
 
-  if (ax !== 0 || ay !== 0) {
-    const len = Math.hypot(ax, ay);
-    const nx = ax / len, ny = ay / len; // diagonals not faster
-    const speed = 200; // px/sec; make a config knob later if you want
+    const accel = 1000;
+    const friction = 5;
 
-    state.player.x += nx * speed * dt;
-    state.player.y += ny * speed * dt;
+    if (ax !== 0 || ay !== 0) {
+      const len = Math.hypot(ax, ay) || 1;
+      state.playerVel.x += (ax / len) * accel * dt;
+      state.playerVel.y += (ay / len) * accel * dt;
+    }
+
+    // Apply friction/deceleration
+    state.playerVel.x -= state.playerVel.x * friction * dt;
+    state.playerVel.y -= state.playerVel.y * friction * dt;
+
+    // Update position based on velocity
+    state.player.x += state.playerVel.x * dt;
+    state.player.y += state.playerVel.y * dt;
+
+    // Rock collision for player
+    const beforeX = state.player.x;
+    const beforeY = state.player.y;
+    collideWithObstacles(
+      state.miasma,
+      state.obstacleGrid,
+      state.player,
+      state.player.r
+    );
+    if (state.player.x !== beforeX) state.playerVel.x = 0;
+    if (state.player.y !== beforeY) state.playerVel.y = 0;
   }
-}
-
-  // Rock collision for player
-  collideWithObstacles(
-    state.miasma,
-    state.obstacleGrid,
-    state.player,
-    state.player.r
-  );
 
 
 // Camera smoothly follows player
