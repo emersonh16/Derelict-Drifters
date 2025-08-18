@@ -4,7 +4,7 @@ import { beam, miasma, enemies, pickups, world, drill, wind } from "../systems/i
 import { hud, devhud, ctx, initCanvas } from "../ui/index.js";
 import { createGameState } from "./state.js";
 import { applyDevHUD } from "../ui/devhud.js";
-import { isoProject } from "./iso.js";
+import { isoProject, worldFromIso, worldTileFromScreen } from "./iso.js";
 import { createRNG } from "../engine/rng.js";
 
 const canvas = ctx.canvas;
@@ -261,6 +261,12 @@ function draw() {
   state.camera.cx = Math.round(w / 2);
   state.camera.cy = Math.round(h / 2);
 
+  // Translate mouse from screen to world space for interactions
+  const mouseWorld = worldFromIso(state.mouse.x, state.mouse.y, state.camera);
+  const mouseTile = worldTileFromScreen(state.mouse.x, state.mouse.y, state.miasma.tile, state.camera);
+  state.mouseWorld = mouseWorld;
+  state.mouseTile = mouseTile;
+
   // Two coordinate spaces: one for grid/collision, one for smooth drawing
   const camDraw = {
     x: state.camera.x,
@@ -277,7 +283,20 @@ function draw() {
   if (state.activeWeapon === "beam") {
     beam.update(state.beam, state.mouse, state.camera.cx, state.camera.cy);
     if (state.miasmaEnabled && !state.paused && !state.gameOver) {
-      miasma.clearWithBeam(state.miasma, state.beam, state.camera, state.time, state.camera.cx, state.camera.cy);
+      const prevAngle = state.beam.angle;
+      state.beam.angle = Math.atan2(
+        mouseWorld.y - state.camera.y,
+        mouseWorld.x - state.camera.x
+      );
+      miasma.clearWithBeam(
+        state.miasma,
+        state.beam,
+        state.camera,
+        state.time,
+        state.camera.cx,
+        state.camera.cy
+      );
+      state.beam.angle = prevAngle;
     }
   }
 

@@ -35,4 +35,40 @@ export function isoProjectTile(col, row, tileSize, cam) {
   return isoProject(wx, wy, cam);
 }
 
-export default { isoProject, isoProjectTile };
+/**
+ * Reverse an isometric projection back into world space.
+ *
+ * @param {number} screenX screen x coordinate
+ * @param {number} screenY screen y coordinate
+ * @param {{x:number,y:number,isoX?:number,isoY?:number,cx:number,cy:number}} cam camera with iso offsets
+ * @returns {{x:number,y:number}}
+ */
+export function worldFromIso(screenX, screenY, cam) {
+  const isoX = screenX - (cam.isoX || 0) - cam.cx;
+  const isoY = screenY - (cam.isoY || 0) - cam.cy;
+  const dx = isoX * 0.5 + isoY;
+  const dy = isoY - isoX * 0.5;
+  return {
+    x: cam.x + dx,
+    y: cam.y + dy,
+  };
+}
+
+/**
+ * Convert a screen position into world tile coordinates.
+ *
+ * @param {number} screenX screen x coordinate
+ * @param {number} screenY screen y coordinate
+ * @param {number} tileSize size of a tile in world units
+ * @param {{x:number,y:number,isoX?:number,isoY?:number,cx:number,cy:number}} cam camera with iso offsets
+ * @returns {{col:number,row:number}}
+ */
+export function worldTileFromScreen(screenX, screenY, tileSize, cam) {
+  const w = worldFromIso(screenX, screenY, cam);
+  return {
+    col: Math.floor(w.x / tileSize),
+    row: Math.floor(w.y / tileSize),
+  };
+}
+
+export default { isoProject, isoProjectTile, worldFromIso, worldTileFromScreen };
