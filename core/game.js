@@ -208,7 +208,13 @@ if (state.miasmaEnabled) {
   }
 }
 
-
+  // Keep player from penetrating rock tiles
+  world.collideWithObstacles(
+    state.miasma,
+    state.obstacleGrid,
+    state.camera,
+    state.player.r
+  );
 
   world.clampToWorld(state.world, state.camera, state.player);
 
