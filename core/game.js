@@ -1,7 +1,6 @@
 // core/game.js
 import { config } from "../core/config.js";
 import { beam, miasma, enemies, pickups, world, drill, wind } from "../systems/index.js";
-import { collideWithObstacles } from "../systems/world.js";
 import { hud, devhud, ctx, initCanvas } from "../ui/index.js";
 import { createGameState } from "./state.js";
 import { applyDevHUD } from "../ui/devhud.js";
@@ -75,9 +74,9 @@ function startGame() {
   state.wind = wind.initWind(config.weather.wind, state.rng);
 
   // --- World + systems ---
-  state.miasma = miasma.initMiasma(config.dynamicMiasma, state.rng);
+  state.miasma = miasma.init(config.dynamicMiasma, state.rng);
 
-  const wInit = world.initWorld(state.miasma, state.player, config.world, state.rng);
+  const wInit = world.init(state.miasma, state.player, config.world, state.rng);
   state.world = wInit.world;
   state.obstacleGrid = wInit.obstacleGrid;
 
@@ -120,7 +119,7 @@ function update(dt) {
   miasma.updateTargetCoverage(state.miasma, dt, config.weather.density);
 
   if (state.miasmaEnabled) {
-    miasma.updateMiasma(state.miasma, state.wind, dt);
+    miasma.update(state.miasma, state.wind, dt);
 
     // Single binary regrow path (gated by config.dynamicMiasma.regrowEnabled)
     miasma.regrowMiasma(
@@ -150,7 +149,7 @@ function update(dt) {
   }
 
   // Rock collision for player
-  collideWithObstacles(
+  world.collideWithObstacles(
     state.miasma,
     state.obstacleGrid,
     state.player,
@@ -163,7 +162,7 @@ function update(dt) {
   state.camera.y += (state.player.y - state.camera.y) * followSpeed * dt;
 
   // Clamp player inside world bounds
-  world.clampToWorld(state.world, state.player, state.player);
+  world.update(state.world, state.player, state.player);
 
   // --- Drill carving ---
   if (state.activeWeapon === "drill" && state.drill && !state.drillOverheated) {
@@ -281,12 +280,12 @@ function draw() {
     }
   }
 
-  world.drawObstacles(ctx, state.miasma, state.obstacleGrid, camDraw);
+  world.draw(ctx, state.miasma, state.obstacleGrid, camDraw);
   enemies.drawEnemies(ctx, state);
   pickups.drawPickups(ctx, state.pickups, camDraw);
 
   if (state.miasmaEnabled) {
-    miasma.drawMiasma(ctx, state.miasma, camDraw, w, h);
+    miasma.draw(ctx, state.miasma, camDraw, w, h);
   }
 
   world.drawWorldBorder(ctx, state.world, camDraw);
