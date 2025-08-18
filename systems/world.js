@@ -109,11 +109,21 @@ function generateBranch(grid, col, row, cols, rows, steps, centerCol, centerRow,
   }
 }
 
-export function update(world, camera, player) {
-  if (!world) return;
+// Keep the camera within world bounds, factoring in the player's radius so
+// they remain visible at the edge of the map.
+export function clampCameraToWorld(world, camera, player) {
+  if (!world || !camera) return;
   const r = player?.r ?? 0;
   camera.x = clamp(camera.x, world.minX + r, world.maxX - r);
   camera.y = clamp(camera.y, world.minY + r, world.maxY - r);
+}
+
+// Clamp any circular entity so it cannot leave the world bounds.
+export function clampEntityToWorld(world, entity) {
+  if (!world || !entity) return;
+  const r = entity.r ?? 0;
+  entity.x = clamp(entity.x, world.minX + r, world.maxX - r);
+  entity.y = clamp(entity.y, world.minY + r, world.maxY - r);
 }
 
 export function drawWorldBorder(ctx, world, camera) {
