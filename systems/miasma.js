@@ -98,10 +98,18 @@ export function updateMiasma(m, wind, dt) {
   m.offsetX += Math.cos(wind.direction) * move;
   m.offsetY += Math.sin(wind.direction) * move;
 
-  while (m.offsetX >= m.tile) { shift(m, +1, 0); m.offsetX -= m.tile; }
-  while (m.offsetX <= -m.tile) { shift(m, -1, 0); m.offsetX += m.tile; }
-  while (m.offsetY >= m.tile) { shift(m, 0, +1); m.offsetY -= m.tile; }
-  while (m.offsetY <= -m.tile) { shift(m, 0, -1); m.offsetY += m.tile; }
+  const xShift = Math.trunc(m.offsetX / m.tile);
+  const yShift = Math.trunc(m.offsetY / m.tile);
+
+  if (xShift !== 0) {
+    shift(m, xShift, 0);
+    m.offsetX -= xShift * m.tile;
+  }
+
+  if (yShift !== 0) {
+    shift(m, 0, yShift);
+    m.offsetY -= yShift * m.tile;
+  }
 }
 
 /**
@@ -286,69 +294,77 @@ function shift(m, dx, dy) {
   // it will be overwritten on the next regrow step (next.set(prev)).
 
   if (dx) {
-    for (let y = 0; y < rows; y++) {
-      if (dx > 0) {
-        // shift right: copy from left neighbor
-        for (let x = cols - 1; x > 0; x--) {
-          const to = y * cols + x;
-          const from = y * cols + (x - 1);
-          strength[to]   = strength[from];
-          lastClear[to]  = lastClear[from];
+    const step = Math.sign(dx);
+    while (dx !== 0) {
+      for (let y = 0; y < rows; y++) {
+        if (step > 0) {
+          // shift right: copy from left neighbor
+          for (let x = cols - 1; x > 0; x--) {
+            const to = y * cols + x;
+            const from = y * cols + (x - 1);
+            strength[to]   = strength[from];
+            lastClear[to]  = lastClear[from];
+          }
+          // new leftmost column
+          const idx = y * cols;
+          strength[idx]  = Math.random() < spawnProb ? 1 : 0;
+          lastClear[idx] = 0;
+        } else {
+          // shift left: copy from right neighbor
+          for (let x = 0; x < cols - 1; x++) {
+            const to = y * cols + x;
+            const from = y * cols + (x + 1);
+            strength[to]   = strength[from];
+            lastClear[to]  = lastClear[from];
+          }
+          // new rightmost column
+          const idx = y * cols + (cols - 1);
+          strength[idx]  = Math.random() < spawnProb ? 1 : 0;
+          lastClear[idx] = 0;
         }
-        // new leftmost column
-        const idx = y * cols;
-        strength[idx]  = Math.random() < spawnProb ? 1 : 0;
-        lastClear[idx] = 0;
-      } else {
-        // shift left: copy from right neighbor
-        for (let x = 0; x < cols - 1; x++) {
-          const to = y * cols + x;
-          const from = y * cols + (x + 1);
-          strength[to]   = strength[from];
-          lastClear[to]  = lastClear[from];
-        }
-        // new rightmost column
-        const idx = y * cols + (cols - 1);
-        strength[idx]  = Math.random() < spawnProb ? 1 : 0;
-        lastClear[idx] = 0;
       }
+      dx -= step;
     }
   }
 
   if (dy) {
-    if (dy > 0) {
-      // shift down: copy from row above
-      for (let y = rows - 1; y > 0; y--) {
+    const step = Math.sign(dy);
+    while (dy !== 0) {
+      if (step > 0) {
+        // shift down: copy from row above
+        for (let y = rows - 1; y > 0; y--) {
+          for (let x = 0; x < cols; x++) {
+            const to = y * cols + x;
+            const from = (y - 1) * cols + x;
+            strength[to]   = strength[from];
+            lastClear[to]  = lastClear[from];
+          }
+        }
+        // new top row
         for (let x = 0; x < cols; x++) {
-          const to = y * cols + x;
-          const from = (y - 1) * cols + x;
-          strength[to]   = strength[from];
-          lastClear[to]  = lastClear[from];
+          const idx = x;
+          strength[idx]  = Math.random() < spawnProb ? 1 : 0;
+          lastClear[idx] = 0;
+        }
+      } else {
+        // shift up: copy from row below
+        for (let y = 0; y < rows - 1; y++) {
+          for (let x = 0; x < cols; x++) {
+            const to = y * cols + x;
+            const from = (y + 1) * cols + x;
+            strength[to]   = strength[from];
+            lastClear[to]  = lastClear[from];
+          }
+        }
+        // new bottom row
+        const base = (rows - 1) * cols;
+        for (let x = 0; x < cols; x++) {
+          const idx = base + x;
+          strength[idx]  = Math.random() < spawnProb ? 1 : 0;
+          lastClear[idx] = 0;
         }
       }
-      // new top row
-      for (let x = 0; x < cols; x++) {
-        const idx = x;
-        strength[idx]  = Math.random() < spawnProb ? 1 : 0;
-        lastClear[idx] = 0;
-      }
-    } else {
-      // shift up: copy from row below
-      for (let y = 0; y < rows - 1; y++) {
-        for (let x = 0; x < cols; x++) {
-          const to = y * cols + x;
-          const from = (y + 1) * cols + x;
-          strength[to]   = strength[from];
-          lastClear[to]  = lastClear[from];
-        }
-      }
-      // new bottom row
-      const base = (rows - 1) * cols;
-      for (let x = 0; x < cols; x++) {
-        const idx = base + x;
-        strength[idx]  = Math.random() < spawnProb ? 1 : 0;
-        lastClear[idx] = 0;
-      }
+      dy -= step;
     }
   }
 }
