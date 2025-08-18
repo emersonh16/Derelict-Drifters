@@ -3,7 +3,7 @@
 /** @typedef {import('../core/state.js').WorldState} WorldState */
 import { isoProject, isoProjectTile } from "../core/iso.js";
 
-export function initWorld(miasma, player, opts = {}, rng) {
+export function init(miasma, player, opts = {}, rng) {
   const t = miasma.tile;
 
   /** @type {WorldState} */
@@ -109,7 +109,7 @@ function generateBranch(grid, col, row, cols, rows, steps, centerCol, centerRow,
   }
 }
 
-export function clampToWorld(world, camera, player) {
+export function update(world, camera, player) {
   if (!world) return;
   const r = player?.r ?? 0;
   camera.x = clamp(camera.x, world.minX + r, world.maxX - r);
@@ -140,7 +140,7 @@ export function drawWorldBorder(ctx, world, camera) {
 }
 
 // Draw rock tiles
-export function drawObstacles(ctx, miasma, obstacleGrid, camera) {
+export function draw(ctx, miasma, obstacleGrid, camera) {
   const t = miasma.tile;
   const cols = miasma.cols;
   const rows = miasma.rows;

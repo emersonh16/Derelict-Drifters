@@ -10,10 +10,10 @@ import { isoProjectTile } from "../core/iso.js";
  *   adjacency-biased probability like your old implementation.
  *
  * Exports:
- *  - initMiasma(cfg)
- *  - updateMiasma(m, wind, dt)
+ *  - init(cfg)
+ *  - update(m, wind, dt)
  *  - regrowMiasma(m, cfg, time, dt)   // single regrow path
- *  - drawMiasma(ctx, m, cam, w, h)
+ *  - draw(ctx, m, cam, w, h)
  *  - worldToIdx(m, wx, wy)
  *  - isFog(m, idx)
  *  - clearWithBeam(m, beamState, camera, time, cx, cy)
@@ -45,7 +45,7 @@ import { isoProjectTile } from "../core/iso.js";
  * @property {{next: () => number}} rng
  */
 
-export function initMiasma(cfg, rng) {
+export function init(cfg, rng) {
   const cols = cfg.cols + cfg.bufferCols * 2;
   const rows = cfg.rows + cfg.bufferRows * 2;
   const size = cols * rows;
@@ -109,7 +109,7 @@ export function initMiasma(cfg, rng) {
 /**
  * Drift the grid (whole tiles) according to wind.
  */
-export function updateMiasma(m, wind, dt) {
+export function update(m, wind, dt) {
   const move = wind.speed * dt;
   m.offsetX += Math.cos(wind.direction) * move;
   m.offsetY += Math.sin(wind.direction) * move;
@@ -158,7 +158,7 @@ export function updateTargetCoverage(m, dt, densityCfg) {
 
 /**
  * Regrowth tick (adjacency biased, double buffer).
- * Call this after updateMiasma in the main loop.
+ * Call this after update in the main loop.
  *
  * cfg fields (from config.dynamicMiasma):
  *  - regrowEnabled: boolean
@@ -184,7 +184,7 @@ export function regrowMiasma(m, cfg, time, dt) {
 /**
  * Draw fog tiles aligned to world pixel grid (centered grid).
  */
-export function drawMiasma(ctx, m, cam, w, h) {
+export function draw(ctx, m, cam, w, h) {
   ctx.fillStyle = "rgba(180,120,255,1.0)";
   const t = m.tile;
 
