@@ -49,14 +49,15 @@ export function initMiasma(cfg) {
     }
   }
 
-  // DEBUG: ensure there's plenty of fog to see (comment out later)
-let fogCount = 0;
-for (let i = 0; i < tiles.length; i++) {
-  // make ~70% of tiles fog so it's obvious
-  tiles[i] = Math.random() < 0.7 ? 1 : 0;
-  if (tiles[i] === 1) fogCount++;
+if (cfg.debugSpawn) {
+  let fogCount = 0;
+  for (let i = 0; i < tiles.length; i++) {
+    tiles[i] = Math.random() < 0.7 ? 1 : 0;
+    if (tiles[i] === 1) fogCount++;
+  }
+  console.log("[miasma] debug spawn → fog tiles:", fogCount, "of", tiles.length);
 }
-console.log("[miasma] debug spawn → fog tiles:", fogCount, "of", tiles.length);
+
 
 
     return {
@@ -96,6 +97,9 @@ export function updateMiasma(m, wind, dt) {
   while (m.offsetY >= m.tile) { shift(m, 0, -1); }
   while (m.offsetY <= -m.tile) { shift(m, 0, +1); }
 
+  // keep offsets wrapped within [0, tile) to avoid jitter
+  m.offsetX = ((m.offsetX % m.tile) + m.tile) % m.tile;
+  m.offsetY = ((m.offsetY % m.tile) + m.tile) % m.tile;
 
 }
 
@@ -147,8 +151,9 @@ function shift(m, dx, dy) {
       }
     }
   }
-  m.offsetX += dx * m.tile;
-  m.offsetY += dy * m.tile;
+  m.offsetX = ((m.offsetX + dx * m.tile) % m.tile + m.tile) % m.tile;
+  m.offsetY = ((m.offsetY + dy * m.tile) % m.tile + m.tile) % m.tile;
+
 }
 
 /**
@@ -162,15 +167,16 @@ export function drawMiasma(ctx, m, cam, cx, cy, w, h) {
   const cxTiles = Math.floor(m.cols / 2);
   const cyTiles = Math.floor(m.rows / 2);
 
-  // Quantized sub-tile drift (no shimmer)
-  const subX = ((m.offsetX % t) + t) % t;
-  const subY = ((m.offsetY % t) + t) % t;
-  const ox = Math.round(subX);
-  const oy = Math.round(subY);
+// Smooth sub-tile drift (no jitter)
+const subX = ((m.offsetX % t) + t) % t;
+const subY = ((m.offsetY % t) + t) % t;
+const ox = subX;
+const oy = subY;
 
-   // World origin of grid
-  const originX = -cxTiles * t + ox;
-  const originY = -cyTiles * t + oy;
+// World origin of grid
+const originX = -cxTiles * t + ox;
+const originY = -cyTiles * t + oy;
+
 
 
   for (let y = 0; y < m.rows; y++) {

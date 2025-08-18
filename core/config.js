@@ -101,15 +101,15 @@ export const config = {
     bigShiftMagnitude: Math.PI // up to 180° turn
   },
 
-  dynamicMiasma: {
-    tile: 14,        // size of each fog tile in pixels (chunkier = faster to draw)
-    cols: 200,       // number of tiles across (keeps total draw calls reasonable)
-    rows: 200,       // number of tiles down
-    spawnProb: 0.5,  // 50% chance a tile starts as fog (makes it obvious)
-    spawnJitter: 0.00, // small randomness so respawn edges look noisy
-    dps: 35,         // damage per second in fog
-    bufferCols: 4,   // off-screen padding for scrolling
-    bufferRows: 4
-  },
+dynamicMiasma: {
+  cols: 200,
+  rows: 200,
+  tile: 14,
+  bufferCols: 4,
+  bufferRows: 4,
+  spawnProb: 0.3,
+  dps: 5,
+  debugSpawn: false,   // << toggle this if you want the 70% test mode
+},
 
 };

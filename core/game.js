@@ -5,13 +5,9 @@ import { hud, devhud } from "../ui/index.js";
 import { createGameState } from "./state.js";
 import { applyDevHUD } from "../ui/devhud.js";
 
-
-
-
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d", { alpha: false });
-ctx.imageSmoothingEnabled = false; // keeps pixels crisp (not required, but nice)
-
+ctx.imageSmoothingEnabled = false; // keeps pixels crisp
 
 const state = createGameState();
 state.miasmaEnabled = true;
@@ -67,23 +63,19 @@ window.addEventListener("keydown", (e) => {
   if (e.repeat) return;
   if (e.key === "1") state.activeWeapon = "beam";
   if (e.key === "2") state.activeWeapon = "drill";
-  if (e.key.toLowerCase() === "m") state.miasmaEnabled = !state.miasmaEnabled; // TODO: remove once miasma testing is complete
+  if (e.key.toLowerCase() === "m") state.miasmaEnabled = !state.miasmaEnabled; // testing toggle
 });
-
-
 
 function togglePause() {
   state.paused = !state.paused;
   if (!state.paused) {
     // commit DevHUD slider values into live state
     applyDevHUD(state);
-
     // sync mouse back to live
     state.mouse.x = state.pendingMouse.x;
     state.mouse.y = state.pendingMouse.y;
   }
 }
-
 
 window.addEventListener("keydown", (e) => {
   if (e.code === "Space") {
@@ -102,7 +94,6 @@ window.addEventListener("keydown", (e) => {
   if (e.repeat) return;
   if (e.key.toLowerCase() === "p") devhud.toggleDevHUD(state);
 });
-
 
 function startGame() {
   // --- Base run/reset ---
@@ -137,50 +128,43 @@ function startGame() {
   state.pendingMouse.x = state.mouse.x;
   state.pendingMouse.y = state.mouse.y;
 
-  // --- Wind first (new system) ---
+  // --- Wind first ---
   state.wind = wind.initWind(config.wind);
 
-  // --- World + systems (order matters) ---
-  // New conveyor-belt miasma uses dynamicMiasma config
+  // --- World + systems ---
   state.miasma = miasma.initMiasma(config.dynamicMiasma);
 
-  // World depends on miasma dimensions
   const wInit = world.initWorld(state.miasma, state.player, config.world);
   state.world = wInit.world;
   state.obstacleGrid = wInit.obstacleGrid;
 
-  // Beam system (controls/params from config.beam)
   state.beam = beam.init(config.beam);
 
-  // Enemies depend on miasma size (spawning uses halfCols/halfRows)
   state.enemies = enemies.initEnemies(state.miasma, config.enemies);
   state.enemyProjectiles.length = 0;
   enemies.spawnInitialEnemies(state, config.enemies.max);
 
-  // HUD
   hud.initHUD(state, config.hud);
 }
-
-
 
 // ---- Init ----
 startGame();
 state.drill = drill.initDrill(state.player);
 devhud.initDevHUD(state);
 
-
 // ---- Update ----
 function update(dt) {
   state.time += dt;
   state.drillDidHit = false;
-    // --- Wind ---
+
+  // --- Wind ---
   wind.updateWind(state.wind, dt, config.wind);
-if (state.miasmaEnabled) {
-  miasma.updateMiasma(state.miasma, state.wind, dt);
-}
+  if (state.miasmaEnabled) {
+    miasma.updateMiasma(state.miasma, state.wind, dt);
+  }
 
   // movement
-   let ax = 0, ay = 0;
+  let ax = 0, ay = 0;
   if (state.keys.has('w')) ay -= 1;
   if (state.keys.has('s')) ay += 1;
   if (state.keys.has('a')) ax -= 1;
@@ -204,29 +188,21 @@ if (state.miasmaEnabled) {
   state.camera.x += state.cameraVel.x * dt;
   state.camera.y += state.cameraVel.y * dt;
 
-  // Prevent player from passing through obstacles
   world.collideWithObstacles(state.miasma, state.obstacleGrid, state.camera, state.player.r);
-
-
   world.clampToWorld(state.world, state.camera, state.player);
 
-
-// --- Drill carving using triangle hitbox ---
-if (state.activeWeapon === "drill" && state.drill && !state.drillOverheated) {
-  const tri = drill.getDrillTriangleWorld(state.drill, state.camera, state.mouse);
-  if (world.carveObstaclesWithDrillTri(state.miasma, state.obstacleGrid, tri, dt, 2)) {
-    state.drillDidHit = true;
+  // --- Drill carving ---
+  if (state.activeWeapon === "drill" && state.drill && !state.drillOverheated) {
+    const tri = drill.getDrillTriangleWorld(state.drill, state.camera, state.mouse);
+    if (world.carveObstaclesWithDrillTri(state.miasma, state.obstacleGrid, tri, dt, 2)) {
+      state.drillDidHit = true;
+    }
   }
-}
-
-
-
-
 
   enemies.updateEnemies(state, dt);
   pickups.updatePickups(state.pickups, state.camera, state.player, state, dt);
 
-  // Drill heat accumulation & cooling
+  // Drill heat
   if (state.drillDidHit && !state.drillOverheated) {
     state.drillHeat += config.drill.heatRate * dt;
     state.drillCoolTimer = 0;
@@ -250,49 +226,49 @@ if (state.activeWeapon === "drill" && state.drill && !state.drillOverheated) {
     state.gameOver = true;
   }
 
-  // Miasma damage
-   if (state.miasmaEnabled) {
+  // --- Miasma damage ---
+  if (state.miasmaEnabled) {
     const step = state.miasma.tile * 0.5;
     let inFog = false;
-    for (let dy = -state.player.r; dy <= state.player.r && !inFog; dy += step) {
-      for (let dx = -state.player.r; dx <= state.player.r; dx += step) {
-        if (dx*dx + dy*dy > state.player.r * state.player.r) continue;
-       const idx = miasma.worldToIdx(
-  state.miasma,
-  state.camera.x + dx,
-  state.camera.y + dy,
-  state.camera              // <-- pass camera
-);
 
-        if (miasma.isFog(state.miasma, idx)) { inFog = true; break; }
+    outer: for (let dy = -state.player.r; dy <= state.player.r; dy += step) {
+      for (let dx = -state.player.r; dx <= state.player.r; dx += step) {
+        if (dx * dx + dy * dy > state.player.r * state.player.r) continue;
+        const idx = miasma.worldToIdx(
+          state.miasma,
+          state.camera.x + dx,
+          state.camera.y + dy,
+          state.camera
+        );
+        if (miasma.isFog(state.miasma, idx)) {
+          inFog = true;
+          break outer; // ✅ exit both loops
+        }
       }
     }
 
     if (inFog) {
       state.health -= config.dynamicMiasma.dps * dt;
-      state.damageFlash = 0.2; // trigger red flash
+      state.damageFlash = 0.2;
       if (state.health < 0) state.health = 0;
     }
-}
-
+  }
 
   state.damageFlash = Math.max(0, state.damageFlash - dt);
 
-if (state.health <= 0 && !state.gameOver) {
-  console.log("health dropped", state.health);
-  state.health = 0;
-  state.gameOver = true;
-}
+  if (state.health <= 0 && !state.gameOver) {
+    console.log("health dropped", state.health);
+    state.health = 0;
+    state.gameOver = true;
+  }
 
-
-  // --- Laser energy drain/recharge ---
+  // --- Laser energy ---
   const beamState = state.beam;
   if (state.activeWeapon === "beam" && beamState.mode === "laser") {
     state.laserEnergy -= config.game.laserDrainRate * dt;
     if (state.laserEnergy <= 0) {
       state.laserEnergy = 0;
-      // auto shut off laser if empty
-      beamState.t = beamState.tConeEnd - 0.01; // forces it back to cone mode
+      beamState.t = beamState.tConeEnd - 0.01; // force back to cone
       beam.update(state.beam, state.mouse, canvas.width / 2, canvas.height / 2);
     }
   } else {
@@ -302,15 +278,12 @@ if (state.health <= 0 && !state.gameOver) {
     );
   }
 
-
   hud.updateHUD(state);
 }
 
 // ---- Draw ----
 function draw() {
   const w = canvas.width, h = canvas.height;
-
-  // 👇 snap screen center and camera only for rendering (prevents seams)
   const cx = Math.round(w / 2);
   const cy = Math.round(h / 2);
   const camDraw = {
@@ -318,29 +291,25 @@ function draw() {
     y: Math.round(state.camera.y),
   };
 
-  // background
   ctx.fillStyle = "#0c0b10";
   ctx.fillRect(0, 0, w, h);
 
-  // Beam sim/UI stays the same; uses screen center (cx, cy)
   if (state.activeWeapon === "beam") {
     beam.update(state.beam, state.mouse, cx, cy);
     if (state.miasmaEnabled && !state.paused && !state.gameOver) {
-      // keep using the REAL camera for gameplay/clearing logic
       miasma.clearWithBeam(state.miasma, state.beam, state.camera, state.time, cx, cy);
     }
   }
 
-  // ✅ pass the SNAPPED camera to world-space rendering to avoid seams
   world.drawObstacles(ctx, state.miasma, state.obstacleGrid, camDraw, cx, cy);
-  enemies.drawEnemies(ctx, state, cx, cy);                   // unchanged (uses state internally)
-  pickups.drawPickups(ctx, state.pickups, camDraw, cx, cy);  // now uses camDraw
+  enemies.drawEnemies(ctx, state, cx, cy);
+  pickups.drawPickups(ctx, state.pickups, camDraw, cx, cy);
 
   if (state.miasmaEnabled) {
-    miasma.drawMiasma(ctx, state.miasma, camDraw, cx, cy, w, h); // now uses camDraw
+    miasma.drawMiasma(ctx, state.miasma, camDraw, cx, cy, w, h);
   }
 
-  world.drawWorldBorder(ctx, state.world, camDraw, cx, cy); // now uses camDraw
+  world.drawWorldBorder(ctx, state.world, camDraw, cx, cy);
 
   if (state.activeWeapon === "beam") {
     beam.draw(ctx, state.beam, cx, cy);
@@ -348,7 +317,6 @@ function draw() {
     drill.drawDrill(ctx, state.drill, state.mouse, state.activeWeapon, cx, cy, state.drillOverheated);
   }
 
-  // player at screen center
   ctx.fillStyle = "#9a3b31";
   ctx.beginPath();
   ctx.arc(cx, cy, state.player.r, 0, Math.PI * 2);
@@ -359,35 +327,29 @@ function draw() {
     ctx.fillRect(0, 0, w, h);
   }
 
-  // paused overlay
   if (state.paused && !state.gameOver) {
     ctx.fillStyle = "rgba(0,0,0,0.5)";
     ctx.fillRect(0, 0, w, h);
-
     ctx.fillStyle = "white";
     ctx.font = "bold 32px sans-serif";
     ctx.textAlign = "center";
     ctx.fillText("PAUSED — press Space", w / 2, 64);
   }
 
-  // game over overlay
   if (state.gameOver) {
     ctx.fillStyle = "rgba(0,0,0,0.6)";
     ctx.fillRect(0, 0, w, h);
-
     ctx.fillStyle = "white";
     ctx.font = "bold 64px sans-serif";
     ctx.textAlign = "center";
     const title = state.win ? "YOU WIN" : "GAME OVER";
     ctx.fillText(title, w / 2, h / 2);
-
     if (!state.win) {
       ctx.font = "24px sans-serif";
       ctx.fillText("Press R to Restart", w / 2, h / 2 + 50);
     }
   }
 }
-
 
 // ---- Main Loop ----
 let last = performance.now();
@@ -402,7 +364,6 @@ function loop(now) {
 
   draw();
 
-  // Dev HUD: update numbers, then draw the tiny box (top-right)
   devhud.updateDevHUD(state, state.dt);
   devhud.drawDevHUD(ctx, state);
 
