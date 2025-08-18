@@ -323,7 +323,9 @@ function draw() {
     switch (d.type) {
       case "tile":
         ctx.fillStyle = d.color;
-        ctx.fillRect(d.x, d.y, d.size, d.size);
+        ctx.strokeStyle = "#0f0";
+        ctx.lineWidth = 1;
+        world.drawTile(ctx, d.x, d.y, d.size);
         break;
       case "enemy":
         ctx.beginPath();
