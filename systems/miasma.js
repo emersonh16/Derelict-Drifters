@@ -183,6 +183,45 @@ export function isFog(m, idx) {
   return m.strength[idx] === 1;
 }
 
+// March a thick ray in WORLD space and clear tiles along it
+function rayStampWorld(s, oxW, oyW, ang, range, thickness, now) {
+  const t = s.tile;
+  const step = t; // tile-sized step (fan rays cover rotation gaps)
+  const cos = Math.cos(ang), sin = Math.sin(ang);
+  const r2 = (thickness * 0.5) ** 2;
+
+  // Grid origin in world coords (centered grid)
+  const originX = -s.halfCols * t;
+  const originY = -s.halfRows * t;
+
+  for (let d = 0; d <= range; d += step) {
+    const pxW = oxW + cos * d;
+    const pyW = oyW + sin * d;
+
+    // Tight AABB around the current disc
+    const minGX = Math.max(0, Math.floor((pxW - thickness - originX) / t));
+    const maxGX = Math.min(s.cols - 1, Math.ceil((pxW + thickness - originX) / t));
+    const minGY = Math.max(0, Math.floor((pyW - thickness - originY) / t));
+    const maxGY = Math.min(s.rows - 1, Math.ceil((pyW + thickness - originY) / t));
+
+    for (let gy = minGY; gy <= maxGY; gy++) {
+      const cyW = originY + gy * t + t * 0.5;
+      for (let gx = minGX; gx <= maxGX; gx++) {
+        const cxW = originX + gx * t + t * 0.5;
+        const dx = cxW - pxW, dy = cyW - pyW;
+        if (dx*dx + dy*dy <= r2) {
+          const i = gy * s.cols + gx;
+          if (s.strength[i] === 1) {
+            s.strength[i]  = 0;
+            s.lastClear[i] = now;
+          }
+        }
+      }
+    }
+  }
+}
+
+
 /**
  * Clear tiles intersecting the beam shape in world space.
  * Records lastClear for regrowDelay.
@@ -194,59 +233,75 @@ export function clearWithBeam(m, beamState, camera, time, cx, cy) {
   const maxRange = mode === "bubble" ? (beamState.radius || 0) : (beamState.range || 0);
   if (!maxRange || maxRange <= 0) return;
 
-  const t = m.tile, cols = m.cols, rows = m.rows;
-  const cxTiles = Math.floor(cols / 2), cyTiles = Math.floor(rows / 2);
+  const t   = m.tile;
+  const px  = camera.x;    // player world X
+  const py  = camera.y;    // player world Y
 
-  const originX = -cxTiles * t;
-  const originY = -cyTiles * t;
+  // -------- LASER: carve a thick, continuous ray (plus a tiny fan) --------
+  if (mode === "laser") {
+    // Minimum thickness in tiles so the cut stays chunky even on small tile sizes
+    const minThick = Math.max(1, (2.0 /* tiles */)) * t;
+    const core = (beamState.laserCoreWidth   ?? 8);
+    const halo = core * (beamState.laserOutlineMult ?? 2.0);
+    const thickness = Math.max(minThick, core + halo);
 
-  // Player world position
-  const px = camera.x, py = camera.y;
+    // Tiny fan to fill rotation gaps at high angular speeds
+    const fanCount = Math.max(1, (m.laserFanCount | 0) || 3);
+    const minDeg   = (m.laserFanMinDeg ?? 0.25) * (Math.PI / 180);
+    const dAng     = Math.max(minDeg, halfArc * 0.5);
+    const start    = angleW - dAng * ((fanCount - 1) * 0.5);
 
-  // Center tile around player and clamp a search window
-  const ix0 = Math.floor((px - originX) / t);
-  const iy0 = Math.floor((py - originY) / t);
-  const rTiles = Math.ceil(maxRange / t) + 1;
+    for (let i = 0; i < fanCount; i++) {
+      const ang = start + i * dAng;
+      rayStampWorld(m, px, py, ang, maxRange + t, thickness, time);
+    }
+    return;
+  }
 
-  const minY = Math.max(0, iy0 - rTiles);
-  const maxY = Math.min(rows - 1, iy0 + rTiles);
-  const minX = Math.max(0, ix0 - rTiles);
-  const maxX = Math.min(cols - 1, ix0 + rTiles);
+  // -------- BUBBLE & CONE: sector test on tile centers (dot product; no atan2) --------
+  const originX = -m.halfCols * t;
+  const originY = -m.halfRows * t;
+  const maxR2   = (maxRange + t) ** 2;
 
-  const angDiffAbs = (a, b) => {
-    let d = a - b;
-    while (d >  Math.PI) d -= Math.PI * 2;
-    while (d < -Math.PI) d += Math.PI * 2;
-    return Math.abs(d);
-  };
+  // Clamp a search window around the player
+  const minGX = Math.max(0, Math.floor((px - maxRange - originX) / t));
+  const maxGX = Math.min(m.cols - 1, Math.ceil((px + maxRange - originX) / t));
+  const minGY = Math.max(0, Math.floor((py - maxRange - originY) / t));
+  const maxGY = Math.min(m.rows - 1, Math.ceil((py + maxRange - originY) / t));
 
-  for (let iy = minY; iy <= maxY; iy++) {
-    const wy = originY + iy * t + t * 0.5;
-    for (let ix = minX; ix <= maxX; ix++) {
-      const idx = iy * cols + ix;
-      if (m.strength[idx] === 0) continue;
+  // Beam direction + cosine threshold
+  const bx = Math.cos(angleW);
+  const by = Math.sin(angleW);
+  const cosThresh = Math.cos(halfArc);
 
-      const wx = originX + ix * t + t * 0.5;
+  for (let gy = minGY; gy <= maxGY; gy++) {
+    const wy = originY + gy * t + t * 0.5;
+    for (let gx = minGX; gx <= maxGX; gx++) {
+      const i  = gy * m.cols + gx;
+      if (m.strength[i] === 0) continue;
 
-      // Vector from player to tile center
-      const dxW = wx - px, dyW = wy - py;
-      const dist = Math.hypot(dxW, dyW);
-      if (dist > maxRange) continue;
+      const wx = originX + gx * t + t * 0.5;
+      const dx = wx - px, dy = wy - py;
+      const r2 = dx*dx + dy*dy;
+      if (r2 > maxR2) continue;
 
       if (mode === "bubble") {
-        m.strength[idx] = 0;
-        m.lastClear[idx] = time;
+        m.strength[i]  = 0;
+        m.lastClear[i] = time;
         continue;
       }
 
-      const aTile = Math.atan2(dyW, dxW);
-      if (angDiffAbs(aTile, angleW) <= halfArc) {
-        m.strength[idx] = 0;
-        m.lastClear[idx] = time;
+      // CONE: dot( norm(dx,dy), beamDir ) >= cos(halfArc)
+      const inv = r2 > 0 ? 1 / Math.sqrt(r2) : 0;
+      const dot = (dx * inv) * bx + (dy * inv) * by;
+      if (dot >= cosThresh) {
+        m.strength[i]  = 0;
+        m.lastClear[i] = time;
       }
     }
   }
 }
+
 
 /* ---------------- Internals ---------------- */
 
