@@ -191,31 +191,25 @@ if (state.miasmaEnabled) {
 }
 
   // movement
-  let ax = 0, ay = 0;
-  if (state.keys.has('w')) ay -= 1;
-  if (state.keys.has('s')) ay += 1;
-  if (state.keys.has('a')) ax -= 1;
-  if (state.keys.has('d')) ax += 1;
+// --- Non-floaty WASD using existing state.keys; move the CAMERA ---
+{
+  const ax = (state.keys.has('d') || state.keys.has('arrowright') ? 1 : 0)
+           - (state.keys.has('a') || state.keys.has('arrowleft')  ? 1 : 0);
+  const ay = (state.keys.has('s') || state.keys.has('arrowdown')  ? 1 : 0)
+           - (state.keys.has('w') || state.keys.has('arrowup')    ? 1 : 0);
 
-  if (ax || ay) {
-    const len = Math.hypot(ax, ay) || 1;
-    ax /= len;
-    ay /= len;
+  if (ax !== 0 || ay !== 0) {
+    const len = Math.hypot(ax, ay);
+    const nx = ax / len, ny = ay / len; // diagonals not faster
+    const speed = 240; // px/sec; make a config knob later if you want
+
+    state.camera.x += nx * speed * dt;
+    state.camera.y += ny * speed * dt;
   }
+}
 
-  const accel = 960;
-  const damping = 4;
 
-  state.cameraVel.x += ax * accel * dt;
-  state.cameraVel.y += ay * accel * dt;
 
-  state.cameraVel.x -= state.cameraVel.x * damping * dt;
-  state.cameraVel.y -= state.cameraVel.y * damping * dt;
-
-  state.camera.x += state.cameraVel.x * dt;
-  state.camera.y += state.cameraVel.y * dt;
-
-  world.collideWithObstacles(state.miasma, state.obstacleGrid, state.camera, state.player.r);
   world.clampToWorld(state.world, state.camera, state.player);
 
   // --- Drill carving ---
