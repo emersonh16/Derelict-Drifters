@@ -149,6 +149,19 @@ export function drawWorldBorder(ctx, world, camera) {
   ctx.restore();
 }
 
+// Draw a single isometric tile (diamond) at screen position
+export function drawTile(ctx, x, y, size) {
+  const half = size / 2;
+  ctx.beginPath();
+  ctx.moveTo(x + half, y);        // top
+  ctx.lineTo(x + size, y + half); // right
+  ctx.lineTo(x + half, y + size); // bottom
+  ctx.lineTo(x, y + half);        // left
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+}
+
 // Queue rock tiles for drawing
 export function draw(drawables, miasma, obstacleGrid, camera) {
   const t = miasma.tile;
