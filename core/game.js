@@ -6,6 +6,7 @@ import { hud, devhud, ctx, initCanvas } from "../ui/index.js";
 import { createGameState } from "./state.js";
 import { applyDevHUD } from "../ui/devhud.js";
 import { isoProject } from "./iso.js";
+import { createRNG } from "../engine/rng.js";
 
 const canvas = ctx.canvas;
 
@@ -31,6 +32,8 @@ function togglePause() {
 
 function startGame() {
   // --- Base run/reset ---
+  const seed = typeof config.seed === "number" ? config.seed : Date.now();
+  state.rng = createRNG(seed);
   state.miasmaEnabled = true;
   state.time = 0;
   state.dt = 0;
@@ -69,12 +72,12 @@ function startGame() {
   state.pendingMouse.y = state.mouse.y;
 
   // --- Wind first ---
-  state.wind = wind.initWind(config.weather.wind);
+  state.wind = wind.initWind(config.weather.wind, state.rng);
 
   // --- World + systems ---
-  state.miasma = miasma.initMiasma(config.dynamicMiasma);
+  state.miasma = miasma.initMiasma(config.dynamicMiasma, state.rng);
 
-  const wInit = world.initWorld(state.miasma, state.player, config.world);
+  const wInit = world.initWorld(state.miasma, state.player, config.world, state.rng);
   state.world = wInit.world;
   state.obstacleGrid = wInit.obstacleGrid;
 

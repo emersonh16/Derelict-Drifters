@@ -42,16 +42,17 @@ import { isoProjectTile } from "../core/iso.js";
  * @property {number} densityT
  * @property {number} densitySeed
  * @property {{minX:number,maxX:number,minY:number,maxY:number}} bubble
+ * @property {{next: () => number}} rng
  */
 
-export function initMiasma(cfg) {
+export function initMiasma(cfg, rng) {
   const cols = cfg.cols + cfg.bufferCols * 2;
   const rows = cfg.rows + cfg.bufferRows * 2;
   const size = cols * rows;
 
   const strength = new Uint8Array(size);
   for (let i = 0; i < size; i++) {
-    strength[i] = Math.random() < cfg.spawnProb ? 1 : 0;
+    strength[i] = rng.next() < cfg.spawnProb ? 1 : 0;
   }
 
   // Optional "safe" patch in center so the player isn't insta-damaged at t0.
@@ -69,7 +70,7 @@ export function initMiasma(cfg) {
   if (cfg.debugSpawn) {
     let fogCount = 0;
     for (let i = 0; i < size; i++) {
-      strength[i] = Math.random() < 0.7 ? 1 : 0;
+      strength[i] = rng.next() < 0.7 ? 1 : 0;
       if (strength[i] === 1) fogCount++;
     }
     console.log("[miasma] debug spawn → fog tiles:", fogCount, "of", size);
@@ -99,7 +100,8 @@ export function initMiasma(cfg) {
     coverage: 0,
     targetCoverage: 0,
     densityT: 0,
-    densitySeed: Math.random() * 1000,
+    densitySeed: rng.next() * 1000,
+    rng,
     bubble: { minX:0, maxX:0, minY:0, maxY:0 },
   };
 }
@@ -368,7 +370,7 @@ function regrowStep(s, now, regrowDelay, baseChance) {
       if (adj > 0) {
         // Combine chance from neighbors: p = 1 - (1 - base)^adj
         const p = 1 - Math.pow(1 - baseChance, adj);
-        if (Math.random() < p) next[i] = 1;
+        if (s.rng.next() < p) next[i] = 1;
       }
     }
   }
@@ -404,7 +406,7 @@ function shift(m, dx, dy) {
         tmpLastClear[di] = lastClear[si];
       } else {
         // Spawn new content on the entering edge.
-        tmpStrength[di]  = Math.random() < spawnChance ? 1 : 0;
+        tmpStrength[di]  = m.rng.next() < spawnChance ? 1 : 0;
         tmpLastClear[di] = -1e9; // effectively "long ago"
       }
     }

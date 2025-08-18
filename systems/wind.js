@@ -12,6 +12,7 @@ import { smoothNoise } from "./smooth-noise.js";
  * @property {number} t
  * @property {number} dirSeed
  * @property {number} spdSeed
+ * @property {{next:() => number}} rng
  */
 
 /**
@@ -19,10 +20,10 @@ import { smoothNoise } from "./smooth-noise.js";
  * @param {import("../core/config.js").config["weather"]["wind"]} cfg
  * @returns {WindState}
  */
-export function initWind(cfg) {
-  const dirSeed = Math.random() * 1000;
-  const spdSeed = Math.random() * 1000;
-  const t = Math.random() * 1000;
+export function initWind(cfg, rng) {
+  const dirSeed = rng.next() * 1000;
+  const spdSeed = rng.next() * 1000;
+  const t = rng.next() * 1000;
   const dir = smoothNoise(t, dirSeed, cfg.dirNoiseScale) * Math.PI;
   const spd = cfg.minSpeed + ((smoothNoise(t, spdSeed, cfg.speedNoiseScale) + 1) * 0.5) * (cfg.maxSpeed - cfg.minSpeed);
   return {
@@ -35,6 +36,7 @@ export function initWind(cfg) {
     t,
     dirSeed,
     spdSeed,
+    rng,
   };
 }
 
@@ -65,9 +67,9 @@ export function updateWind(wind, dt, cfg) {
   wind.targetSpeed = cfg.minSpeed + ((nSpd + 1) * 0.5) * (cfg.maxSpeed - cfg.minSpeed);
 
   // Rare front shift
-  if (Math.random() < cfg.front.probabilityPerSecond * dt) {
-    const mag = cfg.front.magnitudeMinRad + Math.random() * (cfg.front.magnitudeMaxRad - cfg.front.magnitudeMinRad);
-    wind.targetDir += (Math.random() < 0.5 ? -1 : 1) * mag;
+  if (wind.rng.next() < cfg.front.probabilityPerSecond * dt) {
+    const mag = cfg.front.magnitudeMinRad + wind.rng.next() * (cfg.front.magnitudeMaxRad - cfg.front.magnitudeMinRad);
+    wind.targetDir += (wind.rng.next() < 0.5 ? -1 : 1) * mag;
   }
 
   const k = 1 - Math.exp(-dt / cfg.smoothTime);
