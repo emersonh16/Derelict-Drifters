@@ -2,14 +2,12 @@
 import { config } from "../core/config.js";
 import { beam, miasma, enemies, pickups, world, drill, wind } from "../systems/index.js";
 import { collideWithObstacles } from "../systems/world.js";
-import { hud, devhud } from "../ui/index.js";
+import { hud, devhud, ctx, initCanvas } from "../ui/index.js";
 import { createGameState } from "./state.js";
 import { applyDevHUD } from "../ui/devhud.js";
 import { isoProject } from "./iso.js";
 
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d", { alpha: false });
-ctx.imageSmoothingEnabled = false; // keeps pixels crisp
+const canvas = ctx.canvas;
 
 const state = createGameState();
 state.miasmaEnabled = true;
@@ -20,57 +18,6 @@ state.maxDrillHeat = config.drill.maxHeat;
 state.drillOverheated = false;
 state.drillCoolTimer = 0;
 state.drillDidHit = false;
-
-// ---- Resize ----
-function resize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-  state.mouse.x = canvas.width / 2;
-  state.mouse.y = canvas.height / 2;
-  state.pendingMouse.x = state.mouse.x;
-  state.pendingMouse.y = state.mouse.y;
-  state.camera.cx = canvas.width / 2;
-  state.camera.cy = canvas.height / 2;
-}
-window.addEventListener("resize", resize);
-resize();
-
-// ---- Input ----
-canvas.addEventListener("mousemove", (e) => {
-  const rect = canvas.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
-
-  if (state.paused) {
-    state.pendingMouse.x = x;
-    state.pendingMouse.y = y;
-  } else {
-    state.mouse.x = x;
-    state.mouse.y = y;
-  }
-});
-
-canvas.addEventListener("wheel", (e) => {
-  if (state.paused || state.gameOver) return;
-  beam.handleEvent(e, state.beam);
-  e.preventDefault();
-}, { passive: false });
-
-// Restart (R)
-window.addEventListener("keydown", (e) => {
-  if (e.key.toLowerCase() === "r" && state.gameOver) {
-    startGame();
-  }
-});
-
-window.addEventListener("keydown", (e) => {
-  if (e.repeat) return;
-  if (e.key === "1") state.activeWeapon = "beam";
-  if (e.key === "2") state.activeWeapon = "drill";
-  if (e.key.toLowerCase() === "m") state.miasmaEnabled = !state.miasmaEnabled; // testing toggle
-  if (e.key.toLowerCase() === "n") config.dynamicMiasma.regrowEnabled = !config.dynamicMiasma.regrowEnabled; // single binary regrow toggle
-});
-
 function togglePause() {
   state.paused = !state.paused;
   if (!state.paused) {
@@ -81,24 +28,6 @@ function togglePause() {
     state.mouse.y = state.pendingMouse.y;
   }
 }
-
-window.addEventListener("keydown", (e) => {
-  if (e.code === "Space") {
-    e.preventDefault();
-    if (!state.gameOver) togglePause();
-    return;
-  }
-  state.keys.add(e.key.toLowerCase());
-});
-
-window.addEventListener("keyup", (e) => {
-  state.keys.delete(e.key.toLowerCase());
-});
-
-window.addEventListener("keydown", (e) => {
-  if (e.repeat) return;
-  if (e.key.toLowerCase() === "p") devhud.toggleDevHUD(state);
-});
 
 function startGame() {
   // --- Base run/reset ---
@@ -157,6 +86,13 @@ function startGame() {
 
   hud.initHUD(state, config.hud);
 }
+
+initCanvas(state, {
+  onWheel: (e) => beam.handleEvent(e, state.beam),
+  onTogglePause: togglePause,
+  onRestart: startGame,
+  onToggleDevHUD: () => devhud.toggleDevHUD(state),
+});
 
 // ---- Init ----
 startGame();

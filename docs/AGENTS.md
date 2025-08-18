@@ -57,9 +57,9 @@ When refactoring old systems, **do one system at a time** to keep `main` stable.
 ---
 
 ## DOM boundaries
-- **Goal:** keep DOM access inside `ui/`  
-- **Current reality:** `core/game.js` still handles canvas setup and listeners  
-- **Plan:** migrate DOM code gradually into `ui/` modules  
+- **Goal:** keep DOM access inside `ui/`
+- **Current reality:** canvas setup and input live in `ui/canvas.js`; other DOM code is also contained within `ui/`
+- **Plan:** continue migrating any stray DOM usage into `ui/` modules
 
 ---
 
