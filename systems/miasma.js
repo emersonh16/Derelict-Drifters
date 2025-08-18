@@ -56,7 +56,7 @@ export function initMiasma(cfg, rng) {
   }
 
   // Optional "safe" patch in center so the player isn't insta-damaged at t0.
-  const safeR = 10;
+  const safeR = cfg.initialSafeRadius ?? 0;
   const cx = Math.floor(cols / 2);
   const cy = Math.floor(rows / 2);
   for (let dy = -safeR; dy <= safeR; dy++) {
