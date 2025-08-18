@@ -240,7 +240,7 @@ export function clearWithBeam(m, beamState, camera, time, cx, cy) {
   // -------- LASER: carve a thick, continuous ray (plus a tiny fan) --------
   if (mode === "laser") {
     // Minimum thickness in tiles so the cut stays chunky even on small tile sizes
-    const minThick = Math.max(1, (2.0 /* tiles */)) * t;
+    const minThick = Math.max(1, (4.0 /* tiles */)) * t;
     const core = (beamState.laserCoreWidth   ?? 8);
     const halo = core * (beamState.laserOutlineMult ?? 2.0);
     const thickness = Math.max(minThick, core + halo);
