@@ -1,6 +1,7 @@
 // core/game.js
 import { config } from "../core/config.js";
 import { beam, miasma, enemies, pickups, world, drill, wind } from "../systems/index.js";
+import { collideWithObstacles } from "../systems/world.js";
 import { hud, devhud } from "../ui/index.js";
 import { createGameState } from "./state.js";
 import { applyDevHUD } from "../ui/devhud.js";
@@ -119,10 +120,16 @@ function startGame() {
   state.health = state.maxHealth;
   state.scrap = 0;
   state.pickups.length = 0;
-  state.camera.x = 0;
-  state.camera.y = 0;
+  // Player starts at origin
+  state.player.x = 0;
+  state.player.y = 0;
+
+  // Camera starts centered on player
+  state.camera.x = state.player.x;
+  state.camera.y = state.player.y;
   state.cameraVel.x = 0;
   state.cameraVel.y = 0;
+
 
   // Mouse centered (like a fresh load)
   state.mouse.x = canvas.width / 2;
@@ -201,22 +208,30 @@ if (state.miasmaEnabled) {
   if (ax !== 0 || ay !== 0) {
     const len = Math.hypot(ax, ay);
     const nx = ax / len, ny = ay / len; // diagonals not faster
-    const speed = 240; // px/sec; make a config knob later if you want
+    const speed = 200; // px/sec; make a config knob later if you want
 
-    state.camera.x += nx * speed * dt;
-    state.camera.y += ny * speed * dt;
+    state.player.x += nx * speed * dt;
+    state.player.y += ny * speed * dt;
   }
 }
 
-  // Keep player from penetrating rock tiles
-  world.collideWithObstacles(
+  // Rock collision for player
+  collideWithObstacles(
     state.miasma,
     state.obstacleGrid,
-    state.camera,
+    state.player,
     state.player.r
   );
 
-  world.clampToWorld(state.world, state.camera, state.player);
+
+// Camera smoothly follows player
+const followSpeed = 10; // higher = snappier, lower = floatier
+state.camera.x += (state.player.x - state.camera.x) * followSpeed * dt;
+state.camera.y += (state.player.y - state.camera.y) * followSpeed * dt;
+
+
+// Clamp player inside world bounds
+world.clampToWorld(state.world, state.player, state.player);
 
   // --- Drill carving ---
   if (state.activeWeapon === "drill" && state.drill && !state.drillOverheated) {
