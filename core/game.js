@@ -307,10 +307,18 @@ function draw() {
   const w = canvas.width, h = canvas.height;
   const cx = Math.round(w / 2);
   const cy = Math.round(h / 2);
-  const camDraw = {
-    x: Math.round(state.camera.x),
-    y: Math.round(state.camera.y),
-  };
+// Two coordinate spaces: one for grid/collision, one for smooth drawing
+const camLogic = {
+  x: Math.floor(state.camera.x),
+  y: Math.floor(state.camera.y),
+};
+
+const camDraw = {
+  x: state.camera.x,
+  y: state.camera.y,
+};
+
+
 
   ctx.fillStyle = "#0c0b10";
   ctx.fillRect(0, 0, w, h);
